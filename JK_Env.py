@@ -32,6 +32,11 @@ Design notes (read these before changing anything):
   usual. Explicit reset(level=..., rect_x=..., rect_y=...) calls bypass the
   curriculum entirely, so old callers keep working.
 
+* FALL RULE: with terminate_on_fall_below_start=True, an episode ends as a
+  FAILURE the moment the King drops below the level it started this attempt on.
+  Combined with level-N start states, this makes a fall re-anchor the next
+  attempt on level N instead of forcing a full re-climb from the bottom.
+
 * This file does NOT modify King.py / Level.py etc. It only orchestrates them.
 
 IMPORTANT: place this file in the game root (same folder as King.py) so the
@@ -74,6 +79,8 @@ class JumpKingEnv:
                  cur_window=30,                # episodes per success-rate evaluation
                  cur_advance_rate=0.6,         # success rate that unlocks the next stage
                  cur_target_p_bottom=0.6,      # bottom-start fraction once fully unlocked
+                 terminate_on_fall_below_start=False,  # end the attempt if the king drops
+                                                       # below the level it started on
                  seed=None):
 
         self.charges = tuple(charges)
@@ -85,6 +92,7 @@ class JumpKingEnv:
         self.level_penalty = float(level_penalty)
         self.altitude_breadcrumb = float(altitude_breadcrumb)
         self.p_bottom = float(p_bottom)
+        self.terminate_on_fall_below_start = bool(terminate_on_fall_below_start)
         self.rng = np.random.default_rng(seed)
 
         # Curriculum checkpoint pool (list of dicts). Empty list => bottom-only.
@@ -153,6 +161,7 @@ class JumpKingEnv:
 
         self._steps = 0
         self._prev_level = 0
+        self._episode_start_level = 0
         self._best_alt = 0.0
 
     # ------------------------------------------------------------------ setup
@@ -366,7 +375,7 @@ class JumpKingEnv:
         curriculum and forces that exact start (back-compatible with old code).
 
         For level==0 the King's own reset() gives a valid grounded start.
-        For level>0 you MUST have a known-grounded (rect_x, rect_y) — that's
+        For level>0 you MUST have a known-grounded (rect_x, rect_y) -- that's
         exactly what the captured checkpoints provide."""
         self.king.reset()
         self.levels.reset()
@@ -400,6 +409,7 @@ class JumpKingEnv:
         self._set_keys()
         self._steps = 0
         self._prev_level = self.levels.current_level
+        self._episode_start_level = self.levels.current_level   # anchor for the fall rule
         self._best_alt = self._altitude()            # best height reached this episode
         return self._obs(), {}
 
@@ -429,25 +439,38 @@ class JumpKingEnv:
             reward += (alt - self._best_alt) * self.altitude_breadcrumb
             self._best_alt = alt
 
+        reached_goal = False
         terminated = False
         if self.levels.ending:                       # reached the babe at the top
             terminated = True
+            reached_goal = True
             reward += 100.0
         elif self.goal_level is not None and level >= self.goal_level:
             terminated = True
+            reached_goal = True
             reward += self.level_reward                # same scale as a normal pass
+
+        # Fall rule: dropped below the level this attempt started on -> the
+        # attempt is over. End it as a FAILURE (reached_goal stays False) so the
+        # next reset re-anchors on the same level instead of forcing a full
+        # re-climb. The negative level_penalty applied above is the cost of it.
+        if (self.terminate_on_fall_below_start
+                and not terminated
+                and level < self._episode_start_level):
+            terminated = True
 
         truncated = self._steps >= self.max_steps
 
         if terminated or truncated:
-            # success = reached the goal (terminated), not a timeout (truncated)
-            self._record_episode(success=bool(terminated))
+            # success = reached the GOAL, not merely 'episode ended'. A fall
+            # below the start level terminates the episode but is NOT a success.
+            self._record_episode(success=reached_goal)
 
         info = {"level": self.levels.current_level,
                 "altitude": alt,
                 "x": self.king.rect_x,
                 "y": self.king.rect_y,
-                "success": bool(terminated),
+                "success": reached_goal,
                 "from_checkpoint": self._episode_is_curric,
                 "curriculum": self.curriculum_status()}
         return self._obs(), float(reward), terminated, truncated, info
@@ -465,7 +488,7 @@ def make_env(**kwargs):
 
 # ---------------------------------------------------------------- smoke test
 if __name__ == "__main__":
-    # Run from the game root:  python jk_env.py
+    # Run from the game root:  python JK_Env.py
     env = JumpKingEnv(max_steps=20)
     obs, _ = env.reset()
     print("obs_dim:", env.obs_dim, "num_actions:", env.num_actions)

@@ -13,6 +13,12 @@ Then train:
 Start small: --goal-level 1 trains the agent just to clear level 0 (reach
 level 1). Only widen the goal once that works -- that's your correctness check
 that the whole stack (env macro-step, reward sign, PPO math) is sound.
+
+Warm-start onto a harder goal (the "staircase"): once level 0 is solved, load
+that checkpoint and bump the goal. Use --reset-opt when switching tasks:
+    python train.py --num-envs 8 --rollout 64 --goal-level 2 \
+        --start-states start_states.json --p-bottom 0.5 \
+        --resume checkpoints/ppo_XXXX.pt --reset-opt
 """
 
 import os
@@ -22,6 +28,29 @@ import numpy as np
 import torch
 
 from PPO import PPO, RolloutBuffer, get_device
+
+
+def maybe_resume(agent, args, device):
+    """Warm-start from a saved checkpoint. Returns the step to continue from.
+
+    Loads the policy/value weights always. By default also restores the Adam
+    optimizer state so a continued run resumes cleanly; pass --reset-opt when
+    warm-starting onto a NEW task (e.g. bumping --goal-level) where fresh
+    optimizer moments usually train better. The step counter is carried forward
+    so new checkpoint files don't overwrite the old ones."""
+    if not args.resume:
+        return 0
+    ckpt = torch.load(args.resume, map_location=device)
+    agent.net.load_state_dict(ckpt["model"])
+    if not args.reset_opt and "opt" in ckpt:
+        try:
+            agent.opt.load_state_dict(ckpt["opt"])
+        except Exception as e:
+            print("warning: could not load optimizer state, continuing fresh:", e)
+    step = int(ckpt.get("step", 0))
+    print(f"resumed from {args.resume} at step {step} "
+          f"(opt {'reset' if args.reset_opt else 'restored'})")
+    return step
 
 
 def env_factory(args):
@@ -39,6 +68,7 @@ def env_factory(args):
             curriculum=args.curriculum,       # reverse easy->hard curriculum
             cur_advance_rate=args.cur_advance_rate,
             cur_target_p_bottom=args.cur_target_p_bottom,
+            terminate_on_fall_below_start=args.terminate_on_fall,
         )
     return _make
 
@@ -56,6 +86,7 @@ def smoke(args):
                       altitude_breadcrumb=args.altitude_breadcrumb,
                       start_states=args.start_states, p_bottom=args.p_bottom)
     agent = PPO(env.obs_dim, env.num_actions, device=device)
+    maybe_resume(agent, args, device)
     print(f"obs_dim={env.obs_dim} num_actions={env.num_actions} "
           f"params={sum(p.numel() for p in agent.net.parameters())} "
           f"| checkpoints={len(env._start_pool)} p_bottom={env.p_bottom}")
@@ -100,7 +131,7 @@ def train(args):
 
     os.makedirs(args.save_dir, exist_ok=True)
     obs = envs.reset()
-    global_step = 0
+    global_step = maybe_resume(agent, args, device)
     recent_returns, recent_levels, recent_success = [], [], []
     cur_stat = None
     start = time.time()
@@ -186,10 +217,12 @@ def train_visible(args):
                       start_states=args.start_states, p_bottom=args.p_bottom,
                       curriculum=args.curriculum,
                       cur_advance_rate=args.cur_advance_rate,
-                      cur_target_p_bottom=args.cur_target_p_bottom)
+                      cur_target_p_bottom=args.cur_target_p_bottom,
+                      terminate_on_fall_below_start=args.terminate_on_fall)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 lr=args.lr, gamma=args.gamma, lam=args.lam, clip=args.clip,
                 epochs=args.epochs, minibatches=args.minibatches, ent_coef=args.ent_coef)
+    global_step = maybe_resume(agent, args, device)
     print(f"checkpoints={len(env._start_pool)} curriculum={env.curriculum}")
 
     SCALE = 2
@@ -219,7 +252,6 @@ def train_visible(args):
 
     os.makedirs(args.save_dir, exist_ok=True)
     obs, _ = env.reset()
-    global_step = 0
     n_updates = args.total_steps // args.rollout
     for update in range(1, n_updates + 1):
         buf = RolloutBuffer(args.rollout, 1, env.obs_dim, device)
@@ -279,6 +311,15 @@ def build_argparser():
                    help="recent success rate that unlocks the next curriculum stage")
     p.add_argument("--cur-target-p-bottom", type=float, default=0.6,
                    help="bottom-start fraction reached once all checkpoints are mastered")
+    p.add_argument("--terminate-on-fall", action="store_true",
+                   help="end the episode (as a failure) if the king falls below the "
+                        "level it started this attempt on; with level-N start states "
+                        "this re-anchors the next attempt on level N")
+    p.add_argument("--resume", type=str, default=None,
+                   help="path to a checkpoint .pt to warm-start from")
+    p.add_argument("--reset-opt", action="store_true",
+                   help="when resuming, start with a fresh optimizer "
+                        "(recommended when switching tasks, e.g. a new --goal-level)")
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--gamma", type=float, default=0.99)
     p.add_argument("--lam", type=float, default=0.95)
