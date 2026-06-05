@@ -100,7 +100,7 @@ class DDQN(object):
 			logit = self.eval_net(state)
 			action = torch.argmax(logit, 1).item()
 		else:
-			action = int(np.random.choice(4, 1))
+			action = int(np.random.choice(4))
 
 		return action
 
