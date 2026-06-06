@@ -26,10 +26,38 @@ def get_device():
 
 
 class ActorCritic(nn.Module):
-    def __init__(self, obs_dim, num_actions, hidden=128):
+    """Shared trunk -> policy + value heads.
+
+    Two input modes:
+      * MLP (grid_shape=None): obs is a flat scalar vector (legacy behaviour).
+      * CNN (grid_shape=(C,H,W)): obs is a flat vector that PACKS a flattened
+        occupancy grid (first C*H*W entries) followed by `n_scalars` scalars.
+        We unpack, run a small conv stack over the grid, and concat the scalars
+        before the dense trunk. Packing keeps the env/buffer/vec-env pipeline
+        identical to the scalar agent -- only this class knows about the grid.
+    """
+    def __init__(self, obs_dim, num_actions, hidden=128, grid_shape=None, n_scalars=0):
         super().__init__()
+        self.grid_shape = grid_shape
+        self.n_scalars = int(n_scalars)
+        if grid_shape is not None:
+            C, H, W = grid_shape
+            self.grid_flat = C * H * W
+            self.conv = nn.Sequential(
+                nn.Conv2d(C, 16, 3, stride=2, padding=1), nn.ReLU(),
+                nn.Conv2d(16, 32, 3, stride=2, padding=1), nn.ReLU(),
+                nn.Conv2d(32, 32, 3, stride=2, padding=1), nn.ReLU(),
+                nn.Flatten(),
+            )
+            with torch.no_grad():
+                conv_out = self.conv(torch.zeros(1, C, H, W)).shape[1]
+            trunk_in = conv_out + self.n_scalars
+        else:
+            self.grid_flat = 0
+            self.conv = None
+            trunk_in = obs_dim
         self.trunk = nn.Sequential(
-            nn.Linear(obs_dim, hidden), nn.Tanh(),
+            nn.Linear(trunk_in, hidden), nn.Tanh(),
             nn.Linear(hidden, hidden), nn.Tanh(),
         )
         self.policy_head = nn.Linear(hidden, num_actions)
@@ -40,12 +68,22 @@ class ActorCritic(nn.Module):
 
     @staticmethod
     def _init(m):
-        if isinstance(m, nn.Linear):
+        if isinstance(m, (nn.Linear, nn.Conv2d)):
             nn.init.orthogonal_(m.weight, np.sqrt(2))
-            nn.init.constant_(m.bias, 0.0)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0.0)
+
+    def _features(self, x):
+        if self.conv is None:
+            return self.trunk(x)
+        C, H, W = self.grid_shape
+        grid = x[:, :self.grid_flat].reshape(-1, C, H, W)
+        scal = x[:, self.grid_flat:]
+        h = self.conv(grid)
+        return self.trunk(torch.cat([h, scal], dim=1))
 
     def forward(self, x):
-        h = self.trunk(x)
+        h = self._features(x)
         return self.policy_head(h), self.value_head(h).squeeze(-1)
 
     @torch.no_grad()
@@ -124,9 +162,11 @@ class PPO:
                  lr=3e-4, gamma=0.99, lam=0.95,
                  clip=0.2, epochs=4, minibatches=4,
                  vf_coef=0.5, ent_coef=0.01, max_grad_norm=0.5,
-                 clip_value=True, hidden=128):
+                 clip_value=True, hidden=128,
+                 grid_shape=None, n_scalars=0):
         self.device = device or get_device()
-        self.net = ActorCritic(obs_dim, num_actions, hidden).to(self.device)
+        self.net = ActorCritic(obs_dim, num_actions, hidden,
+                               grid_shape=grid_shape, n_scalars=n_scalars).to(self.device)
         self.opt = torch.optim.Adam(self.net.parameters(), lr=lr)
 
         self.gamma, self.lam, self.clip = gamma, lam, clip

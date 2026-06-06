@@ -51,7 +51,9 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                 ep_ret, ep_len = 0.0, 0
                 remote.send((obs, info))
             elif cmd == "spec":
-                remote.send((env.obs_dim, env.num_actions))
+                remote.send((env.obs_dim, env.num_actions,
+                             getattr(env, "grid_shape", None),
+                             getattr(env, "n_scalars", 0)))
             elif cmd == "close":
                 env.close()
                 remote.close()
@@ -78,7 +80,8 @@ class SubprocVecEnv:
             wr.close()
 
         self.remotes[0].send(("spec", None))
-        self.obs_dim, self.num_actions = self.remotes[0].recv()
+        (self.obs_dim, self.num_actions,
+         self.grid_shape, self.n_scalars) = self.remotes[0].recv()
 
     def reset(self):
         for r in self.remotes:

@@ -23,6 +23,41 @@ that checkpoint and bump the goal. Use --reset-opt when switching tasks:
 
 import os
 import time
+import json
+
+def _merge_frontier_to_json(path, states, grid=12):
+    """Merge auto-captured frontier states into start_states.json, in the same
+    {level_str: [[x, y], ...]} format capture.py writes. ONLY the main training
+    process calls this (workers just report states via info), so there is no
+    multi-writer race. Dedups by a coarse pixel grid and never drops existing
+    points -- this augments the manual pool, it does not replace it."""
+    try:
+        with open(path, 'r') as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            data = {}
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        data = {}
+    seen = set()
+    for lvl_str, pts in data.items():
+        for pt in pts:
+            if isinstance(pt, (list, tuple)) and len(pt) >= 2:
+                seen.add((str(lvl_str), int(pt[0]) // grid, int(pt[1]) // grid))
+    added = 0
+    for st in states:
+        lvl = str(int(st['level'])); x = int(st['x']); y = int(st['y'])
+        key = (lvl, x // grid, y // grid)
+        if key in seen:
+            continue
+        data.setdefault(lvl, []).append([x, y])
+        seen.add(key); added += 1
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, path)        # atomic write so a crash can't corrupt the file
+    return added
+
+
 import argparse
 import numpy as np
 import torch
@@ -69,6 +104,8 @@ def env_factory(args):
             cur_advance_rate=args.cur_advance_rate,
             cur_target_p_bottom=args.cur_target_p_bottom,
             terminate_on_fall_below_start=args.terminate_on_fall,
+            auto_frontier=args.auto_frontier,
+            frontier_min_level=args.frontier_min_level,
         )
     return _make
 
@@ -85,7 +122,8 @@ def smoke(args):
                       level_reward=args.level_reward, level_penalty=args.level_penalty,
                       altitude_breadcrumb=args.altitude_breadcrumb,
                       start_states=args.start_states, p_bottom=args.p_bottom)
-    agent = PPO(env.obs_dim, env.num_actions, device=device)
+    agent = PPO(env.obs_dim, env.num_actions, device=device,
+                grid_shape=env.grid_shape, n_scalars=env.n_scalars)
     maybe_resume(agent, args, device)
     print(f"obs_dim={env.obs_dim} num_actions={env.num_actions} "
           f"params={sum(p.numel() for p in agent.net.parameters())} "
@@ -127,13 +165,15 @@ def train(args):
     agent = PPO(obs_dim, num_actions, device=device,
                 lr=args.lr, gamma=args.gamma, lam=args.lam,
                 clip=args.clip, epochs=args.epochs, minibatches=args.minibatches,
-                ent_coef=args.ent_coef)
+                ent_coef=args.ent_coef,
+                grid_shape=envs.grid_shape, n_scalars=envs.n_scalars)
 
     os.makedirs(args.save_dir, exist_ok=True)
     obs = envs.reset()
     global_step = maybe_resume(agent, args, device)
     recent_returns, recent_levels, recent_success = [], [], []
     cur_stat = None
+    frontier_buffer = []
     start = time.time()
 
     n_updates = args.total_steps // (args.rollout * args.num_envs)
@@ -160,6 +200,8 @@ def train(args):
                     recent_success.append(1.0 if info.get("success") else 0.0)
                     if info.get("curriculum"):
                         cur_stat = info["curriculum"]
+                if info.get("frontier"):
+                    frontier_buffer.append(info["frontier"])
 
             obs = nobs
             global_step += args.num_envs
@@ -168,6 +210,12 @@ def train(args):
             last_value = agent.net.forward(
                 torch.as_tensor(obs, device=device).float())[1]
         logs = agent.update(buf, last_value)
+
+        if args.auto_frontier and frontier_buffer and update % args.frontier_dump_every == 0:
+            added = _merge_frontier_to_json(args.frontier_out, frontier_buffer, grid=12)
+            print(f"  frontier: +{added} new start spots -> {args.frontier_out} "
+                  f"({len(frontier_buffer)} reported this window)")
+            frontier_buffer = []
 
         if update % args.log_every == 0:
             sps = int(global_step / (time.time() - start))
@@ -218,10 +266,13 @@ def train_visible(args):
                       curriculum=args.curriculum,
                       cur_advance_rate=args.cur_advance_rate,
                       cur_target_p_bottom=args.cur_target_p_bottom,
-                      terminate_on_fall_below_start=args.terminate_on_fall)
+                      terminate_on_fall_below_start=args.terminate_on_fall,
+                      auto_frontier=args.auto_frontier,
+                      frontier_min_level=args.frontier_min_level)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 lr=args.lr, gamma=args.gamma, lam=args.lam, clip=args.clip,
-                epochs=args.epochs, minibatches=args.minibatches, ent_coef=args.ent_coef)
+                epochs=args.epochs, minibatches=args.minibatches, ent_coef=args.ent_coef,
+                grid_shape=env.grid_shape, n_scalars=env.n_scalars)
     global_step = maybe_resume(agent, args, device)
     print(f"checkpoints={len(env._start_pool)} curriculum={env.curriculum}")
 
@@ -309,6 +360,16 @@ def build_argparser():
                         "checkpoint and unlock harder/lower ones as success rises")
     p.add_argument("--cur-advance-rate", type=float, default=0.6,
                    help="recent success rate that unlocks the next curriculum stage")
+    p.add_argument("--auto-frontier", action="store_true",
+                   help="bank grounded high-level states the agent reaches as new "
+                        "start states (augments the manual pool; no manual capture needed)")
+    p.add_argument("--frontier-min-level", type=int, default=1,
+                   help="only auto-bank states on this level or above (set to the level "
+                        "you are currently pushing from to avoid re-banking mastered ones)")
+    p.add_argument("--frontier-out", type=str, default="start_states.json",
+                   help="file the auto-captured start states are merged into")
+    p.add_argument("--frontier-dump-every", type=int, default=25,
+                   help="write newly banked frontier states to disk every N updates")
     p.add_argument("--cur-target-p-bottom", type=float, default=0.6,
                    help="bottom-start fraction reached once all checkpoints are mastered")
     p.add_argument("--terminate-on-fall", action="store_true",

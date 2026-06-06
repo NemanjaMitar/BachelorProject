@@ -53,6 +53,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 import numpy as np
+from Occupancy import build_occupancy_grid, GRID_CELL
 
 
 class JumpKingEnv:
@@ -81,6 +82,10 @@ class JumpKingEnv:
                  cur_target_p_bottom=0.6,      # bottom-start fraction once fully unlocked
                  terminate_on_fall_below_start=False,  # end the attempt if the king drops
                                                        # below the level it started on
+                 auto_frontier=False,        # bank grounded high-level states as new starts
+                 frontier_min_level=1,       # only bank states on this level or above
+                 frontier_per_level_cap=20,  # max banked spots kept per level
+                 frontier_grid=12,           # dedup granularity in pixels
                  seed=None):
 
         self.charges = tuple(charges)
@@ -97,6 +102,20 @@ class JumpKingEnv:
 
         # Curriculum checkpoint pool (list of dicts). Empty list => bottom-only.
         self._start_pool = self._load_start_states(start_states)
+        # ---- automatic frontier capture (augments the manual pool) -----------
+        self.auto_frontier = bool(auto_frontier)
+        self.frontier_min_level = int(frontier_min_level)
+        self.frontier_per_level_cap = int(frontier_per_level_cap)
+        self.frontier_grid = int(frontier_grid)
+        self._best_seen_level = 0
+        # Seed dedup bookkeeping from the existing pool so we never re-bank a known spot.
+        self._frontier_keys, self._frontier_count = set(), {}
+        for _s in self._start_pool:
+            _lv = int(self._state_field(_s, "level", "current_level", default=0))
+            _x = int(self._state_field(_s, "x", "rect_x", default=0))
+            _y = int(self._state_field(_s, "y", "rect_y", default=0))
+            self._frontier_keys.add((_lv, _x // self.frontier_grid, _y // self.frontier_grid))
+            self._frontier_count[_lv] = self._frontier_count.get(_lv, 0) + 1
 
         # ---- reverse curriculum state ---------------------------------------
         # Rank checkpoints EASIEST-first: closest to the goal = highest level,
@@ -156,7 +175,16 @@ class JumpKingEnv:
         self._keys = defaultdict(int)
         pygame.key.get_pressed = lambda: self._keys
 
-        self.obs_dim = 4
+        # ---- vision observation: occupancy grid (flattened) + scalars ------
+        # We PACK grid+scalars into one flat vector so VecEnv/RolloutBuffer/the
+        # train loop keep seeing a plain float vector; the network unpacks it.
+        self.grid_cell = GRID_CELL
+        self.grid_h = self.screen_h // self.grid_cell
+        self.grid_w = self.screen_w // self.grid_cell
+        self.grid_shape = (3, self.grid_h, self.grid_w)
+        self.n_scalars = 4
+        self._grid_flat = 3 * self.grid_h * self.grid_w
+        self.obs_dim = self._grid_flat + self.n_scalars
         self.num_actions = len(self.actions)
 
         self._steps = 0
@@ -234,6 +262,31 @@ class JumpKingEnv:
             return None
         idx = int(self.rng.integers(len(self._start_pool)))
         return self._start_pool[idx]
+
+    def _maybe_bank_frontier(self):
+        """Bank the king's current spot as a NEW start state if it is grounded
+        and settled on a level >= frontier_min_level. The move_available() gate is
+        the SAME grounded-and-settled check capture.py uses -- it is what keeps an
+        un-grounded state (the instant-death spawn from Test B) out of the pool.
+        Augments the manual pool; never removes anything. Returns the banked dict
+        (for persistence by the trainer) or None."""
+        if not self.auto_frontier or not self.move_available():
+            return None
+        level = self.levels.current_level
+        if level < self.frontier_min_level:
+            return None
+        x, y = int(self.king.rect_x), int(self.king.rect_y)
+        key = (level, x // self.frontier_grid, y // self.frontier_grid)
+        if key in self._frontier_keys:
+            return None                              # already have a near-identical spot
+        if self._frontier_count.get(level, 0) >= self.frontier_per_level_cap:
+            return None                              # enough diversity banked on this level
+        state = {"level": level, "x": x, "y": y}
+        self._start_pool.append(state)               # plain-mode sampler reads this
+        self._frontier_keys.add(key)
+        self._frontier_count[level] = self._frontier_count.get(level, 0) + 1
+        self._best_seen_level = max(self._best_seen_level, level)
+        return state
 
     def _record_episode(self, success):
         """Called once per finished episode. Drives the reverse curriculum:
@@ -357,12 +410,23 @@ class JumpKingEnv:
                 + (self.screen_h - self.king.rect_y))
 
     def _obs(self):
-        return np.array([
+        # Occupancy grid of the CURRENT screen (solid/king/hazard), flattened,
+        # followed by the same 4 scalars as before (sub-cell position still
+        # matters for jump precision, and the grid is only 8px-resolution).
+        try:
+            platforms = self.levels.levels[self.levels.current_level].platforms or []
+        except Exception:
+            platforms = []
+        grid = build_occupancy_grid(platforms,
+                                    self.king.rect_x, self.king.rect_y,
+                                    self.screen_w, self.screen_h, self.grid_cell)
+        scalars = np.array([
             self.king.rect_x / self.screen_w,
             self.king.rect_y / self.screen_h,
             self.levels.current_level / self.max_level,
             self._altitude() / ((self.max_level + 1) * self.screen_h),
         ], dtype=np.float32)
+        return np.concatenate([grid.ravel(), scalars]).astype(np.float32)
 
     # ------------------------------------------------------------------- gym
     def reset(self, level=None, rect_x=None, rect_y=None):
@@ -466,12 +530,15 @@ class JumpKingEnv:
             # below the start level terminates the episode but is NOT a success.
             self._record_episode(success=reached_goal)
 
+        banked = self._maybe_bank_frontier()   # grounded-gated; None unless a new spot
+
         info = {"level": self.levels.current_level,
                 "altitude": alt,
                 "x": self.king.rect_x,
                 "y": self.king.rect_y,
                 "success": reached_goal,
                 "from_checkpoint": self._episode_is_curric,
+                "frontier": banked,
                 "curriculum": self.curriculum_status()}
         return self._obs(), float(reward), terminated, truncated, info
 
