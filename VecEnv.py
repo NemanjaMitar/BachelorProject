@@ -42,7 +42,8 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                     info = dict(info)
                     info["terminal_obs"] = obs
                     info["episode"] = {"r": ep_ret, "l": ep_len,
-                                       "level": info.get("level", -1)}
+                                       "level": info.get("level", -1),
+                                       "start_level": info.get("start_level", -1)}
                     obs, _ = env.reset()
                     ep_ret, ep_len = 0.0, 0
                 remote.send((obs, reward, term, trunc, info))

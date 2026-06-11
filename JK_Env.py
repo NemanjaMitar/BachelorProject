@@ -74,6 +74,10 @@ class JumpKingEnv:
                  level_reward=10.0,            # reward per level climbed (the objective)
                  level_penalty=10.0,           # penalty per level fallen (magnitude)
                  altitude_breadcrumb=0.01,     # weak within-level gradient toward the exit
+                 new_level_bonus=0.0,          # one-time bonus the first time an episode
+                                               # reaches a level above its previous best;
+                                               # creates a strong pull to attempt the next
+                                               # crossing despite fall risk
                  start_states=None,            # path to start_states.json (curriculum), or None
                  p_bottom=0.0,                 # prob of resetting to the bottom anyway
                  curriculum=False,             # enable the reverse (easy->hard) curriculum
@@ -86,6 +90,27 @@ class JumpKingEnv:
                  frontier_min_level=1,       # only bank states on this level or above
                  frontier_per_level_cap=20,  # max banked spots kept per level
                  frontier_grid=12,           # dedup granularity in pixels
+                 frontier_bias=0.0,          # plain-mode start sampling: weight pooled
+                                             # starts by (level+1)**bias. 0 = uniform
+                                             # (old behaviour); higher = concentrate
+                                             # practice on the highest reached levels.
+                 balanced_starts=True,       # sample a LEVEL uniformly, then a checkpoint
+                                             # within it, so every level gets equal episode
+                                             # budget regardless of how many checkpoints it
+                                             # holds. Fixes frontier-starvation AND the
+                                             # forgetting of lower levels. False = legacy
+                                             # uniform-over-checkpoints draw.
+                 fall_tol_frac=0.5,          # with terminate_on_fall_below_start, also end
+                                             # the attempt when altitude drops more than
+                                             # this fraction of a screen below the start
+                                             # altitude -- catches WITHIN-screen tumbles,
+                                             # not just clean drops to a lower level.
+                 time_penalty=0.0,           # small reward subtracted EVERY macro-step.
+                                             # Makes camping-in-place cost something so the
+                                             # agent can't sit safely forever. Keep it TINY
+                                             # (~0.01): if total step penalty over an
+                                             # episode exceeds the fall penalty, the agent
+                                             # will deliberately fall to stop the bleed.
                  seed=None):
 
         self.charges = tuple(charges)
@@ -96,7 +121,11 @@ class JumpKingEnv:
         self.level_reward = float(level_reward)
         self.level_penalty = float(level_penalty)
         self.altitude_breadcrumb = float(altitude_breadcrumb)
+        self.new_level_bonus = float(new_level_bonus)
         self.p_bottom = float(p_bottom)
+        self.balanced_starts = bool(balanced_starts)
+        self.fall_tol_frac = float(fall_tol_frac)
+        self.time_penalty = float(time_penalty)
         self.terminate_on_fall_below_start = bool(terminate_on_fall_below_start)
         self.rng = np.random.default_rng(seed)
 
@@ -107,6 +136,7 @@ class JumpKingEnv:
         self.frontier_min_level = int(frontier_min_level)
         self.frontier_per_level_cap = int(frontier_per_level_cap)
         self.frontier_grid = int(frontier_grid)
+        self.frontier_bias = float(frontier_bias)
         self._best_seen_level = 0
         # Seed dedup bookkeeping from the existing pool so we never re-bank a known spot.
         self._frontier_keys, self._frontier_count = set(), {}
@@ -161,6 +191,8 @@ class JumpKingEnv:
         pygame.display.set_mode((w, h))
         self.game_screen = pygame.Surface((w, h))
         self.screen_w, self.screen_h = w, h
+        # absolute altitude tolerance for the fall rule (pixels)
+        self._fall_alt_tol = self.fall_tol_frac * self.screen_h
 
         self.levels = Levels(self.game_screen)
         self.king = King(self.game_screen, self.levels)
@@ -191,6 +223,7 @@ class JumpKingEnv:
         self._prev_level = 0
         self._episode_start_level = 0
         self._best_alt = 0.0
+        self._episode_max_level = 0
 
     # ------------------------------------------------------------------ setup
     def _build_action_table(self):
@@ -260,8 +293,47 @@ class JumpKingEnv:
         # plain mode
         if self.rng.random() < self.p_bottom:
             return None
-        idx = int(self.rng.integers(len(self._start_pool)))
-        return self._start_pool[idx]
+        pool = self._start_pool
+
+        # Per-level BALANCED sampling: pick a level uniformly among the levels
+        # that have checkpoints, THEN pick a checkpoint within it. This gives
+        # every level the same expected episode budget no matter how many
+        # checkpoints it holds. Uniform-over-checkpoints (the legacy path below)
+        # overweights levels with many captured spots and starves the frontier;
+        # balancing fixes the frontier starvation AND stops lower levels being
+        # forgotten, because each keeps getting equal practice. frontier_bias,
+        # if >0, tilts the LEVEL draw toward higher levels (level+1)**bias.
+        if self.balanced_starts and len(pool) > 1:
+            by_level = {}
+            for i, s in enumerate(pool):
+                lv = int(self._state_field(s, "level", "current_level", default=0))
+                by_level.setdefault(lv, []).append(i)
+            levels = sorted(by_level)
+            if self.frontier_bias > 0.0 and len(levels) > 1:
+                wl = np.array([(lv + 1.0) ** self.frontier_bias for lv in levels],
+                              dtype=np.float64)
+                wl /= wl.sum()
+                lv = levels[int(self.rng.choice(len(levels), p=wl))]
+            else:
+                lv = levels[int(self.rng.integers(len(levels)))]
+            idxs = by_level[lv]
+            return pool[idxs[int(self.rng.integers(len(idxs)))]]
+
+        # legacy: (optionally biased) uniform OVER CHECKPOINTS
+        # Uniform sampling drowns the few high-level frontier spots in the many
+        # low-level ones, so almost no budget lands at the wall. Weight each
+        # start by (level+1)**frontier_bias to concentrate practice on the
+        # highest levels reached so far. bias == 0 reproduces uniform sampling.
+        if self.frontier_bias > 0.0 and len(pool) > 1:
+            levels = np.array(
+                [self._state_field(s, "level", "current_level", default=0)
+                 for s in pool], dtype=np.float64)
+            w = (levels + 1.0) ** self.frontier_bias
+            w /= w.sum()
+            idx = int(self.rng.choice(len(pool), p=w))
+        else:
+            idx = int(self.rng.integers(len(pool)))
+        return pool[idx]
 
     def _maybe_bank_frontier(self):
         """Bank the king's current spot as a NEW start state if it is grounded
@@ -475,6 +547,8 @@ class JumpKingEnv:
         self._prev_level = self.levels.current_level
         self._episode_start_level = self.levels.current_level   # anchor for the fall rule
         self._best_alt = self._altitude()            # best height reached this episode
+        self._episode_start_alt = self._best_alt     # fixed anchor for the fall rule
+        self._episode_max_level = self.levels.current_level  # highest level this episode
         return self._obs(), {}
 
     def step(self, action_idx, render_cb=None):
@@ -491,6 +565,7 @@ class JumpKingEnv:
         # some signal pointing toward the exit. Re-treading height and falling
         # both earn ZERO from the breadcrumb -> no hop-in-place optimum.
         reward = 0.0
+        reward -= self.time_penalty        # camping-in-place is no longer free
 
         d_level = level - self._prev_level
         if d_level > 0:
@@ -503,6 +578,14 @@ class JumpKingEnv:
             reward += (alt - self._best_alt) * self.altitude_breadcrumb
             self._best_alt = alt
 
+        # One-time bonus the first time THIS episode reaches a level above its
+        # running max. Recurs every episode (so PPO can actually learn from it)
+        # and is paid per new level, so pushing the frontier upward is always
+        # worth a chunk of reward even when a miss risks a fall.
+        if level > self._episode_max_level:
+            reward += self.new_level_bonus * (level - self._episode_max_level)
+            self._episode_max_level = level
+
         reached_goal = False
         terminated = False
         if self.levels.ending:                       # reached the babe at the top
@@ -514,14 +597,20 @@ class JumpKingEnv:
             reached_goal = True
             reward += self.level_reward                # same scale as a normal pass
 
-        # Fall rule: dropped below the level this attempt started on -> the
-        # attempt is over. End it as a FAILURE (reached_goal stays False) so the
-        # next reset re-anchors on the same level instead of forcing a full
-        # re-climb. The negative level_penalty applied above is the cost of it.
-        if (self.terminate_on_fall_below_start
-                and not terminated
-                and level < self._episode_start_level):
-            terminated = True
+        # Fall rule: end the attempt if the king has clearly lost height. We
+        # catch TWO cases: (1) a clean drop to a lower screen (level <
+        # start_level), and (2) a WITHIN-screen tumble -- altitude dropped more
+        # than _fall_alt_tol below the start altitude. Case (2) is the one the
+        # old level-only rule missed: botching a jump near the top of screen 4
+        # drops the king to the bottom of screen 4 (still level 4) and it would
+        # otherwise reclimb the whole screen. Ending it re-anchors the next
+        # attempt instead. End as FAILURE (reached_goal stays False); the
+        # negative level_penalty already applied is the cost.
+        if (self.terminate_on_fall_below_start and not terminated):
+            fell_a_level = level < self._episode_start_level
+            fell_within = alt < (self._episode_start_alt - self._fall_alt_tol)
+            if fell_a_level or fell_within:
+                terminated = True
 
         truncated = self._steps >= self.max_steps
 
@@ -537,6 +626,7 @@ class JumpKingEnv:
                 "x": self.king.rect_x,
                 "y": self.king.rect_y,
                 "success": reached_goal,
+                "start_level": self._episode_start_level,
                 "from_checkpoint": self._episode_is_curric,
                 "frontier": banked,
                 "curriculum": self.curriculum_status()}

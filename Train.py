@@ -98,14 +98,19 @@ def env_factory(args):
             level_reward=args.level_reward,
             level_penalty=args.level_penalty,
             altitude_breadcrumb=args.altitude_breadcrumb,
+                      new_level_bonus=args.new_level_bonus,
             start_states=args.start_states,   # curriculum checkpoint pool
             p_bottom=args.p_bottom,           # fraction of resets that start at the bottom
             curriculum=args.curriculum,       # reverse easy->hard curriculum
             cur_advance_rate=args.cur_advance_rate,
             cur_target_p_bottom=args.cur_target_p_bottom,
             terminate_on_fall_below_start=args.terminate_on_fall,
+            balanced_starts=args.balanced_starts,
+            fall_tol_frac=args.fall_tol_frac,
+            time_penalty=args.time_penalty,
             auto_frontier=args.auto_frontier,
             frontier_min_level=args.frontier_min_level,
+            frontier_bias=args.frontier_bias,
         )
     return _make
 
@@ -121,7 +126,11 @@ def smoke(args):
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=args.goal_level,
                       level_reward=args.level_reward, level_penalty=args.level_penalty,
                       altitude_breadcrumb=args.altitude_breadcrumb,
-                      start_states=args.start_states, p_bottom=args.p_bottom)
+                      new_level_bonus=args.new_level_bonus,
+                      start_states=args.start_states, p_bottom=args.p_bottom,
+                      balanced_starts=args.balanced_starts,
+                      fall_tol_frac=args.fall_tol_frac,
+                      time_penalty=args.time_penalty)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 grid_shape=env.grid_shape, n_scalars=env.n_scalars)
     maybe_resume(agent, args, device)
@@ -172,6 +181,8 @@ def train(args):
     obs = envs.reset()
     global_step = maybe_resume(agent, args, device)
     recent_returns, recent_levels, recent_success = [], [], []
+    from collections import defaultdict, deque
+    succ_by_start = defaultdict(lambda: deque(maxlen=100))   # start_level -> recent 0/1
     cur_stat = None
     frontier_buffer = []
     start = time.time()
@@ -198,6 +209,8 @@ def train(args):
                     recent_returns.append(info["episode"]["r"])
                     recent_levels.append(info["episode"]["level"])
                     recent_success.append(1.0 if info.get("success") else 0.0)
+                    sl = info.get("start_level", info["episode"].get("start_level", -1))
+                    succ_by_start[int(sl)].append(1.0 if info.get("success") else 0.0)
                     if info.get("curriculum"):
                         cur_stat = info["curriculum"]
                 if info.get("frontier"):
@@ -209,6 +222,15 @@ def train(args):
         with torch.no_grad():
             last_value = agent.net.forward(
                 torch.as_tensor(obs, device=device).float())[1]
+
+        # Entropy-coefficient anneal. A high constant ent_coef keeps the policy
+        # near-uniform forever, so even if it stumbles onto the L4 exit jump it
+        # can't sharpen into reliably repeating it. Annealing lets it COMMIT
+        # once it has found something, while keeping exploration high early.
+        if args.ent_coef_final is not None:
+            frac = min(1.0, global_step / max(1, args.ent_anneal_steps))
+            agent.ent_coef = args.ent_coef + frac * (args.ent_coef_final - args.ent_coef)
+
         logs = agent.update(buf, last_value)
 
         if args.auto_frontier and frontier_buffer and update % args.frontier_dump_every == 0:
@@ -227,10 +249,16 @@ def train(args):
             if cur_stat:
                 cur = (f" | cur {cur_stat['unlocked']}/{cur_stat['total']} "
                        f"pb {cur_stat['p_bottom']}")
+            per_lvl = ""
+            if succ_by_start:
+                parts = [f"L{lvl}:{np.mean(v):.2f}"
+                         for lvl, v in sorted(succ_by_start.items()) if len(v) > 0]
+                if parts:
+                    per_lvl = "  succ@ " + " ".join(parts)
             print(f"upd {update:4d} | step {global_step:8d} | {sps:5d} sps | "
                   f"ret {mr:8.2f} | succ {sr:4.2f} | mean_lvl {ml:4.1f} | "
                   f"max_lvl {mx:2d}{cur} | "
-                  f"kl {logs['approx_kl']:+.4f} | ent {logs['entropy']:.3f}")
+                  f"kl {logs['approx_kl']:+.4f} | ent {logs['entropy']:.3f}{per_lvl}")
 
         if update % args.save_every == 0:
             path = os.path.join(args.save_dir, f"ppo_{global_step}.pt")
@@ -262,11 +290,15 @@ def train_visible(args):
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=args.goal_level,
                       level_reward=args.level_reward, level_penalty=args.level_penalty,
                       altitude_breadcrumb=args.altitude_breadcrumb,
+                      new_level_bonus=args.new_level_bonus,
                       start_states=args.start_states, p_bottom=args.p_bottom,
                       curriculum=args.curriculum,
                       cur_advance_rate=args.cur_advance_rate,
                       cur_target_p_bottom=args.cur_target_p_bottom,
                       terminate_on_fall_below_start=args.terminate_on_fall,
+                      balanced_starts=args.balanced_starts,
+                      fall_tol_frac=args.fall_tol_frac,
+                      time_penalty=args.time_penalty,
                       auto_frontier=args.auto_frontier,
                       frontier_min_level=args.frontier_min_level)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
@@ -350,11 +382,27 @@ def build_argparser():
     p.add_argument("--level-reward", type=float, default=10.0)
     p.add_argument("--level-penalty", type=float, default=10.0)
     p.add_argument("--altitude-breadcrumb", type=float, default=0.01)
+    p.add_argument("--new-level-bonus", type=float, default=0.0,
+                   help="one-time reward the first time an episode reaches a level above "
+                        "its running max (paid per new level). Creates a strong pull to "
+                        "attempt the next crossing despite fall risk; 0 = off.")
     p.add_argument("--start-states", type=str, default=None,
                    help="path to start_states.json; enables the checkpoint curriculum")
     p.add_argument("--p-bottom", type=float, default=0.2,
                    help="fraction of episode resets that start at the bottom "
                         "instead of a checkpoint (only matters with --start-states)")
+    p.add_argument("--balanced-starts", action=argparse.BooleanOptionalAction, default=True,
+                   help="sample a LEVEL uniformly, then a checkpoint within it, so every "
+                        "level gets equal practice regardless of how many checkpoints it "
+                        "has. Fixes both frontier-starvation and lower-level forgetting. "
+                        "Use --no-balanced-starts for the old uniform-over-checkpoints draw.")
+    p.add_argument("--time-penalty", type=float, default=0.0,
+                   help="small reward subtracted every macro-step so camping in place is not free. Keep TINY (~0.01); larger than the fall penalty per episode makes the agent suicide to stop the bleed.")
+    p.add_argument("--fall-tol-frac", type=float, default=0.5,
+                   help="with --terminate-on-fall, also end the attempt if the king's "
+                        "altitude drops more than this fraction of a screen below its "
+                        "start altitude -- this is what catches WITHIN-screen tumbles, "
+                        "not just clean drops to a lower level. 0.5 = half a screen.")
     p.add_argument("--curriculum", action="store_true",
                    help="reverse curriculum: start only from the easiest (near-exit) "
                         "checkpoint and unlock harder/lower ones as success rises")
@@ -366,6 +414,11 @@ def build_argparser():
     p.add_argument("--frontier-min-level", type=int, default=1,
                    help="only auto-bank states on this level or above (set to the level "
                         "you are currently pushing from to avoid re-banking mastered ones)")
+    p.add_argument("--frontier-bias", type=float, default=0.0,
+                   help="extra tilt toward higher levels. In --balanced-starts mode this "
+                        "weights the LEVEL draw by (level+1)**bias; in legacy mode it "
+                        "weights individual checkpoints. 0 = no tilt (recommended with "
+                        "balanced starts).")
     p.add_argument("--frontier-out", type=str, default="start_states.json",
                    help="file the auto-captured start states are merged into")
     p.add_argument("--frontier-dump-every", type=int, default=25,
@@ -374,8 +427,9 @@ def build_argparser():
                    help="bottom-start fraction reached once all checkpoints are mastered")
     p.add_argument("--terminate-on-fall", action="store_true",
                    help="end the episode (as a failure) if the king falls below the "
-                        "level it started this attempt on; with level-N start states "
-                        "this re-anchors the next attempt on level N")
+                        "level it started this attempt on OR more than --fall-tol-frac of "
+                        "a screen below its start altitude; re-anchors the next attempt "
+                        "on the same level instead of forcing a full re-climb")
     p.add_argument("--resume", type=str, default=None,
                    help="path to a checkpoint .pt to warm-start from")
     p.add_argument("--reset-opt", action="store_true",
@@ -388,6 +442,13 @@ def build_argparser():
     p.add_argument("--epochs", type=int, default=4)
     p.add_argument("--minibatches", type=int, default=4)
     p.add_argument("--ent-coef", type=float, default=0.04)
+    p.add_argument("--ent-coef-final", type=float, default=None,
+                   help="if set, linearly anneal ent_coef from --ent-coef down to this "
+                        "value over --ent-anneal-steps env steps. Lets the policy commit "
+                        "to a found exit jump instead of being held near-uniform. "
+                        "Try --ent-coef 0.04 --ent-coef-final 0.005.")
+    p.add_argument("--ent-anneal-steps", type=int, default=1_000_000,
+                   help="env steps over which ent_coef anneals to --ent-coef-final")
     p.add_argument("--log-every", type=int, default=1)
     p.add_argument("--save-every", type=int, default=50)
     p.add_argument("--save-dir", type=str, default="checkpoints")
