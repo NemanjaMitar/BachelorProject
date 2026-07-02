@@ -160,6 +160,10 @@ def main():
             king.rect_y = env.screen_h - king.rect_height
 
         # Render
+        try:
+            env.levels.update_hiddenwalls(king)   # fade fake walls like the real game
+        except Exception:
+            pass
         env.game_screen.fill((0, 0, 0))
         try:
             env.levels.blit1()

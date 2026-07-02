@@ -12,11 +12,13 @@ how few actions it needs to clear its level:
 
 Usage:
     python Validate_Start_States.py start_states.json --depth 2
+    python Validate_Start_States.py start_states.json --level 5      # one level only
     python Validate_Start_States.py start_states.json --depth 3 --min-score 0.0
 
-Writes <path>_scored.json (a list of {level,x,y,score} dicts, the format
-JK_Env._load_start_states already understands) keeping states with
-score > --min-score.
+Writes a list of {level,x,y,score} dicts (the format JK_Env._load_start_states
+already understands) keeping states with score > --min-score. Output file:
+<path>_scored.json, or starts_L<n>.json when --level is given -- ready to pass
+straight to Train.py --start-states.
 """
 
 import os
@@ -92,6 +94,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("path")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--level", type=int, default=None,
+                    help="only validate states captured on this level and write "
+                         "them to starts_L<n>.json (per-level training pool)")
     ap.add_argument("--depth", type=int, default=2)
     ap.add_argument("--min-score", type=float, default=-1.0,
                     help="drop states with score <= this. Default keeps "
@@ -101,8 +106,13 @@ def main():
                          "Use 0.0 to keep only provably exit-reaching states.")
     args = ap.parse_args()
 
-    env = JumpKingEnv(max_steps=10_000)
     pool = _load(args.path)
+    if args.level is not None:
+        pool = [st for st in pool if st["level"] == args.level]
+        if not pool:
+            print(f"no captured states for level {args.level} in {args.path}")
+            return
+    env = JumpKingEnv(max_steps=10_000)
 
     scored = []
     for i, st in enumerate(pool):
@@ -126,7 +136,12 @@ def main():
     env.close()
 
     kept = [s for s in scored if s["score"] > args.min_score]
-    out = args.out or (os.path.splitext(args.path)[0] + "_scored.json")
+    if args.out:
+        out = args.out
+    elif args.level is not None:
+        out = f"starts_L{args.level}.json"
+    else:
+        out = os.path.splitext(args.path)[0] + "_scored.json"
     with open(out, "w") as f:
         json.dump(kept, f, indent=2)
     print(f"\nwrote {len(kept)}/{len(scored)} states to {out} "

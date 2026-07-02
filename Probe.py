@@ -70,6 +70,10 @@ def make_renderer(env, scale, fps):
                                          and e.key == pygame.K_ESCAPE):
                 env.close()
                 sys.exit()
+        try:
+            env.levels.update_hiddenwalls(env.king)   # fade fake walls like the real game
+        except Exception:
+            pass
         env.game_screen.fill((0, 0, 0))
         try:
             env.levels.blit1()

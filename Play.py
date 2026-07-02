@@ -140,6 +140,13 @@ def main():
 
     def draw():
         # The env renders the world onto env.game_screen if we ask the level to.
+        # Hidden walls (levels 6/7/21) are fake bricks with no collision; this
+        # fades them when the king overlaps, like the real game -- otherwise he
+        # looks embedded in solid wall while using a secret passage.
+        try:
+            env.levels.update_hiddenwalls(env.king)
+        except Exception:
+            pass
         env.game_screen.fill((0, 0, 0))
         try:
             env.levels.blit1()
