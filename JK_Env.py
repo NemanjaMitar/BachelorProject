@@ -72,6 +72,11 @@ class JumpKingEnv:
                                        # many frames (~1.4 px/frame) for micro-
                                        # positioning into narrow launch windows.
                                        # CHANGES num_actions: needs a fresh model.
+                 extra_charges=(),     # extra jump charges APPENDED to the end
+                                       # of the action table (e.g. (22,24,28,30))
+                                       # so existing models' indices stay valid.
+                                       # CHANGES num_actions: growth-compatible
+                                       # with old checkpoints, see Play.ModelBank.
                  max_steps=600,
                  max_settle_frames=2000,
                  goal_level=None,
@@ -96,6 +101,7 @@ class JumpKingEnv:
         self.charges = tuple(charges)
         self.walk_frames = int(walk_frames)
         self.fine_walk_frames = int(fine_walk_frames or 0)
+        self.extra_charges = tuple(extra_charges or ())
         self.max_steps = int(max_steps)
         self.max_settle_frames = int(max_settle_frames)
         self.goal_level = goal_level          # if set: terminate+reward on reaching it
@@ -148,6 +154,10 @@ class JumpKingEnv:
         self._cur_p_bottom = 0.0 if self.curriculum else self.p_bottom
         self._succ = []                        # recent episode successes (1/0)
         self._episode_is_curric = False        # did THIS episode start from a checkpoint?
+        # Per-checkpoint failure-rate EMA for prioritized sampling. Starts at
+        # 1.0 (assume failing) so new/unlocked states immediately get focus.
+        self._cp_fail = [1.0] * len(self._cp_ranked)
+        self._episode_cp_idx = None            # which checkpoint THIS episode used
 
         self._build_action_table()
 
@@ -218,6 +228,11 @@ class JumpKingEnv:
             # launch windows narrower than the normal walk stride (~14 px).
             self.actions.append(("walk", "left", self.fine_walk_frames))
             self.actions.append(("walk", "right", self.fine_walk_frames))
+        # Extra charges go LAST so every earlier index keeps its meaning and
+        # old checkpoints stay compatible with a grown action table.
+        for d in ("left", "up", "right"):
+            for c in self.extra_charges:
+                self.actions.append(("jump", d, c))
 
     # ------------------------------------------------------------- curriculum
     def _load_start_states(self, path):
@@ -264,15 +279,21 @@ class JumpKingEnv:
         """Pick a checkpoint to start at, or None to start at the bottom.
 
         Plain mode: uniform over the whole pool, bottom with prob p_bottom.
-        Curriculum mode: uniform over only the currently-unlocked EASIEST
-        checkpoints, bottom with the (ramping) curriculum bottom fraction."""
+        Curriculum mode: PRIORITIZED over the currently-unlocked checkpoints --
+        each state is weighted by its recent failure rate (EMA), so a start the
+        policy keeps failing gets sampled hard until it is solved, and a solved
+        one keeps a small floor weight as rehearsal against forgetting.
+        (Same idea as Prioritized Level Replay, Jiang et al. 2021.)"""
+        self._episode_cp_idx = None
         if not self._start_pool:
             return None
         if self.curriculum:
             if self.rng.random() < self._cur_p_bottom:
                 return None
             k = max(1, self._unlocked)
-            idx = int(self.rng.integers(k))
+            w = np.asarray(self._cp_fail[:k], dtype=np.float64) + 0.1
+            idx = int(self.rng.choice(k, p=w / w.sum()))
+            self._episode_cp_idx = idx
             return self._cp_ranked[idx]
         # plain mode
         if self.rng.random() < self.p_bottom:
@@ -320,6 +341,12 @@ class JumpKingEnv:
         next-harder checkpoint; once all are unlocked, ramp up bottom starts."""
         if not self.curriculum or not self._cp_ranked:
             return
+        # Per-checkpoint failure EMA drives the prioritized sampler: slow decay
+        # on success (0.9) keeps a solved state rehearsed a while; a failure
+        # pulls its weight back up fast.
+        if self._episode_cp_idx is not None:
+            i = self._episode_cp_idx
+            self._cp_fail[i] = 0.9 * self._cp_fail[i] + (0.0 if success else 0.1)
         self._succ.append(1.0 if success else 0.0)
         if len(self._succ) < self.cur_window:
             return
@@ -334,10 +361,19 @@ class JumpKingEnv:
 
     def curriculum_status(self):
         rate = (sum(self._succ) / len(self._succ)) if self._succ else float("nan")
-        return {"unlocked": self._unlocked,
-                "total": len(self._cp_ranked),
-                "p_bottom": round(self._cur_p_bottom, 2),
-                "succ_rate": round(rate, 2)}
+        status = {"unlocked": self._unlocked,
+                  "total": len(self._cp_ranked),
+                  "p_bottom": round(self._cur_p_bottom, 2),
+                  "succ_rate": round(rate, 2)}
+        if self._cp_ranked and self._unlocked:
+            # the start state the prioritized sampler is currently grinding
+            k = max(1, self._unlocked)
+            i = int(np.argmax(self._cp_fail[:k]))
+            s = self._cp_ranked[i]
+            status["focus"] = (int(self._state_field(s, "x", "rect_x", default=-1)),
+                               int(self._state_field(s, "y", "rect_y", default=-1)),
+                               round(self._cp_fail[i], 2))
+        return status
 
     @staticmethod
     def _state_field(state, *names, default=None):
@@ -427,6 +463,9 @@ class JumpKingEnv:
                and not self.levels.ending):
             frame()
             frames += 1
+        # False => physics trap: the king never came to rest (e.g. bouncing in
+        # a slope pocket). step() ends the episode on it.
+        return self.move_available() or self.levels.ending
 
     # ------------------------------------------------------------------ state
     def _altitude(self):
@@ -534,7 +573,7 @@ class JumpKingEnv:
         return self._obs(), {}
 
     def step(self, action_idx, render_cb=None):
-        self._apply_action(int(action_idx), render_cb=render_cb)
+        settled = self._apply_action(int(action_idx), render_cb=render_cb)
         self._steps += 1
 
         level = self.levels.current_level
@@ -577,6 +616,12 @@ class JumpKingEnv:
         if (self.terminate_on_fall_below_start
                 and not terminated
                 and level < self._episode_start_level):
+            terminated = True
+
+        # Physics-trap guard: the settle loop capped out, the king is still
+        # bouncing (slope pocket etc.). Nothing meaningful can be learned or
+        # rendered past this point -- end the attempt as a failure.
+        if not settled and not terminated:
             terminated = True
 
         truncated = self._steps >= self.max_steps

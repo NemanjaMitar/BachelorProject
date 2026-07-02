@@ -50,6 +50,11 @@ def build_argparser():
     p.add_argument("--scale", type=int, default=2, help="window upscaling")
     p.add_argument("--action", type=int, default=None,
                    help="action index to trace (default: strongest jump)")
+    p.add_argument("--fine-walk-frames", type=int, default=0,
+                   help="include the micro-walk action pair in the sweep "
+                        "(match what training uses)")
+    p.add_argument("--extra-charges", type=str, default="",
+                   help="comma list of appended jump charges (match training)")
     return p
 
 
@@ -185,7 +190,10 @@ if __name__ == "__main__":
         os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
     from JK_Env import JumpKingEnv
 
-    env = JumpKingEnv(max_steps=10_000)
+    extra = (tuple(int(c) for c in args.extra_charges.split(","))
+             if args.extra_charges else ())
+    env = JumpKingEnv(max_steps=10_000, fine_walk_frames=args.fine_walk_frames,
+                      extra_charges=extra)
     draw, hud = make_renderer(env, args.scale, args.fps) if args.render else (None, None)
 
     if args.action is not None:

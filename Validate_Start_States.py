@@ -98,6 +98,11 @@ def main():
                     help="only validate states captured on this level and write "
                          "them to starts_L<n>.json (per-level training pool)")
     ap.add_argument("--depth", type=int, default=2)
+    ap.add_argument("--fine-walk-frames", type=int, default=0,
+                    help="include the micro-walk action pair in the BFS "
+                         "(match what training uses)")
+    ap.add_argument("--extra-charges", type=str, default="",
+                    help="comma list of appended jump charges (match training)")
     ap.add_argument("--min-score", type=float, default=-1.0,
                     help="drop states with score <= this. Default keeps "
                          "EVERYTHING, including score-0 states: a 0 only means "
@@ -112,7 +117,11 @@ def main():
         if not pool:
             print(f"no captured states for level {args.level} in {args.path}")
             return
-    env = JumpKingEnv(max_steps=10_000)
+    extra = (tuple(int(c) for c in args.extra_charges.split(","))
+             if args.extra_charges else ())
+    env = JumpKingEnv(max_steps=10_000,
+                      fine_walk_frames=args.fine_walk_frames,
+                      extra_charges=extra)
 
     scored = []
     for i, st in enumerate(pool):

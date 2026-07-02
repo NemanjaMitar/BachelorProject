@@ -75,17 +75,33 @@ def main():
                     help="argmax policy (default: sample like training)")
     ap.add_argument("--out", default=None,
                     help="pool file to merge into (default starts_L<N+1>.json)")
+    ap.add_argument("--fine-walk-frames", type=int, default=0,
+                    help="pass the same value the model was TRAINED with")
+    ap.add_argument("--extra-charges", type=str, default="",
+                    help="comma list of appended jump charges the model was "
+                         "trained with (e.g. 22,24,28,30)")
     args = ap.parse_args()
 
     goal = args.level + 1
     out = args.out or f"starts_L{goal}.json"
     device = get_device()
 
+    extra = tuple(int(c) for c in args.extra_charges.split(",")) if args.extra_charges else ()
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=goal,
-                      start_states=args.start_states, p_bottom=0.0)
-    net = ActorCritic(env.obs_dim, env.num_actions,
-                      grid_shape=env.grid_shape, n_scalars=env.n_scalars).to(device)
+                      start_states=args.start_states, p_bottom=0.0,
+                      fine_walk_frames=args.fine_walk_frames,
+                      extra_charges=extra)
     ckpt = torch.load(args.checkpoint, map_location=device)
+    n_act = ckpt["model"]["policy_head.weight"].shape[0]
+    if n_act > env.num_actions:
+        raise SystemExit(
+            f"{args.checkpoint} was trained with {n_act} actions but the env "
+            f"has {env.num_actions} -- match --fine-walk-frames / "
+            f"--extra-charges to training.")
+    # Actions are appended, never reordered, so a smaller model's indices
+    # stay valid in a bigger env.
+    net = ActorCritic(env.obs_dim, n_act,
+                      grid_shape=env.grid_shape, n_scalars=env.n_scalars).to(device)
     net.load_state_dict(ckpt["model"])
     net.eval()
     print(f"loaded {args.checkpoint} | level {args.level} -> {goal} | "

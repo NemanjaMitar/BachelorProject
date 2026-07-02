@@ -65,6 +65,32 @@ import torch
 from PPO import PPO, RolloutBuffer, get_device
 
 
+def _parse_charges(s):
+    return tuple(int(c) for c in s.split(",")) if s else ()
+
+
+def _expand_policy_head(state, net):
+    """Allow resuming a checkpoint with FEWER actions than the current net
+    (extra actions are appended to the table, so old indices keep their
+    meaning): copy the old policy-head rows, leave the new rows at their
+    fresh init so the new actions start near-uniform."""
+    w_old = state.get("policy_head.weight")
+    b_old = state.get("policy_head.bias")
+    cur = net.state_dict()
+    w_new = cur["policy_head.weight"]
+    if (w_old is not None and w_old.shape[0] < w_new.shape[0]
+            and w_old.shape[1] == w_new.shape[1]):
+        w = w_new.clone(); w[:w_old.shape[0]] = w_old
+        b = cur["policy_head.bias"].clone(); b[:b_old.shape[0]] = b_old
+        state = dict(state)
+        state["policy_head.weight"] = w
+        state["policy_head.bias"] = b
+        print(f"resume: expanded policy head {w_old.shape[0]} -> "
+              f"{w_new.shape[0]} actions (new actions start at init)")
+        return state, True
+    return state, False
+
+
 def maybe_resume(agent, args, device):
     """Warm-start from a saved checkpoint. Returns the step to continue from.
 
@@ -76,8 +102,14 @@ def maybe_resume(agent, args, device):
     if not args.resume:
         return 0
     ckpt = torch.load(args.resume, map_location=device)
-    agent.net.load_state_dict(ckpt["model"])
-    if not args.reset_opt and "opt" in ckpt:
+    model_state, expanded = _expand_policy_head(ckpt["model"], agent.net)
+    agent.net.load_state_dict(model_state)
+    if expanded:
+        # Adam's load_state_dict does NOT validate tensor shapes: stale
+        # moments for the old head "load" fine and crash at opt.step().
+        # An expanded head therefore always starts with a fresh optimizer.
+        print("resume: head was expanded -> starting with a fresh optimizer")
+    elif not args.reset_opt and "opt" in ckpt:
         try:
             agent.opt.load_state_dict(ckpt["opt"])
         except Exception as e:
@@ -108,6 +140,7 @@ def env_factory(args):
             auto_frontier=args.auto_frontier,
             frontier_min_level=args.frontier_min_level,
             fine_walk_frames=args.fine_walk_frames,
+            extra_charges=_parse_charges(args.extra_charges),
         )
     return _make
 
@@ -124,7 +157,8 @@ def smoke(args):
                       level_reward=args.level_reward, level_penalty=args.level_penalty,
                       altitude_breadcrumb=args.altitude_breadcrumb,
                       start_states=args.start_states, p_bottom=args.p_bottom,
-                      fine_walk_frames=args.fine_walk_frames)
+                      fine_walk_frames=args.fine_walk_frames,
+                      extra_charges=_parse_charges(args.extra_charges))
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 grid_shape=env.grid_shape, n_scalars=env.n_scalars)
     maybe_resume(agent, args, device)
@@ -231,6 +265,9 @@ def train(args):
             if cur_stat:
                 cur = (f" | cur {cur_stat['unlocked']}/{cur_stat['total']} "
                        f"pb {cur_stat['p_bottom']}")
+                if cur_stat.get("focus"):
+                    fx, fy, fw = cur_stat["focus"]
+                    cur += f" | focus ({fx},{fy}) f={fw}"
             print(f"upd {update:4d} | step {global_step:8d} | {sps:5d} sps | "
                   f"ret {mr:8.2f} | succ {sr:4.2f} | mean_lvl {ml:4.1f} | "
                   f"max_lvl {mx:2d}{cur} | "
@@ -240,7 +277,12 @@ def train(args):
             path = os.path.join(args.save_dir, f"ppo_{global_step}.pt")
             torch.save({"model": agent.net.state_dict(),
                         "opt": agent.opt.state_dict(),
-                        "step": global_step}, path)
+                        "step": global_step,
+                        # lets Play/Handoff auto-configure the env action set
+                        "action_cfg": {
+                            "fine_walk_frames": args.fine_walk_frames,
+                            "extra_charges": list(_parse_charges(args.extra_charges))}},
+                       path)
             print("saved", path)
 
     envs.close()
@@ -274,7 +316,8 @@ def train_visible(args):
                       terminate_on_fall_below_start=args.terminate_on_fall,
                       auto_frontier=args.auto_frontier,
                       frontier_min_level=args.frontier_min_level,
-                      fine_walk_frames=args.fine_walk_frames)
+                      fine_walk_frames=args.fine_walk_frames,
+                      extra_charges=_parse_charges(args.extra_charges))
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 lr=args.lr, gamma=args.gamma, lam=args.lam, clip=args.clip,
                 epochs=args.epochs, minibatches=args.minibatches, ent_coef=args.ent_coef,
@@ -339,7 +382,11 @@ def train_visible(args):
         if update % args.save_every == 0:
             path = os.path.join(args.save_dir, f"ppo_visible_{global_step}.pt")
             torch.save({"model": agent.net.state_dict(),
-                        "opt": agent.opt.state_dict(), "step": global_step}, path)
+                        "opt": agent.opt.state_dict(), "step": global_step,
+                        "action_cfg": {
+                            "fine_walk_frames": args.fine_walk_frames,
+                            "extra_charges": list(_parse_charges(args.extra_charges))}},
+                       path)
             print("saved", path)
     env.close()
 
@@ -403,6 +450,10 @@ def build_argparser():
                         "into launch windows narrower than the 14 px normal walk. "
                         "CHANGES the action count: incompatible with old checkpoints, "
                         "train a fresh model when enabling")
+    p.add_argument("--extra-charges", type=str, default="",
+                   help="comma list of extra jump charges APPENDED to the "
+                        "action table (e.g. 22,24,28,30). Old checkpoints "
+                        "warm-start via automatic policy-head expansion.")
     p.add_argument("--ent-coef", type=float, default=0.04)
     p.add_argument("--log-every", type=int, default=1)
     p.add_argument("--save-every", type=int, default=50)
