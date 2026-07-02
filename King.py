@@ -634,7 +634,7 @@ class King():
 
 						elif self._collide_top(platform):
 
-							self.rect_y = platform.bottom
+							self.rect_y = platform.rect.bottom
 							self.lastCollision = platform
 							self.collideTop = True
 
@@ -823,7 +823,7 @@ class King():
 			self.levels.current_level += 1
 			self.level_change += 1
 
-		if self.rect_y > self.screen.get_height():
+		elif self.rect_y > self.screen.get_height():
 
 			self.rect_y -= self.screen.get_height() + self.rect_width
 			self.levels.current_level -= 1

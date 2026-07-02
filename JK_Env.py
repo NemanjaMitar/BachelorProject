@@ -68,6 +68,10 @@ class JumpKingEnv:
     def __init__(self,
                  charges=(4, 8, 12, 16, 20, 26, 32),
                  walk_frames=10,
+                 fine_walk_frames=0,   # if > 0, add a second walk pair of this
+                                       # many frames (~1.4 px/frame) for micro-
+                                       # positioning into narrow launch windows.
+                                       # CHANGES num_actions: needs a fresh model.
                  max_steps=600,
                  max_settle_frames=2000,
                  goal_level=None,
@@ -80,8 +84,9 @@ class JumpKingEnv:
                  cur_window=30,                # episodes per success-rate evaluation
                  cur_advance_rate=0.6,         # success rate that unlocks the next stage
                  cur_target_p_bottom=0.6,      # bottom-start fraction once fully unlocked
-                 terminate_on_fall_below_start=False,  # end the attempt if the king drops
+                 terminate_on_fall_below_start=True,   # end the attempt if the king drops
                                                        # below the level it started on
+                                                       # (per-level models: default ON)
                  auto_frontier=False,        # bank grounded high-level states as new starts
                  frontier_min_level=1,       # only bank states on this level or above
                  frontier_per_level_cap=20,  # max banked spots kept per level
@@ -90,6 +95,7 @@ class JumpKingEnv:
 
         self.charges = tuple(charges)
         self.walk_frames = int(walk_frames)
+        self.fine_walk_frames = int(fine_walk_frames or 0)
         self.max_steps = int(max_steps)
         self.max_settle_frames = int(max_settle_frames)
         self.goal_level = goal_level          # if set: terminate+reward on reaching it
@@ -128,9 +134,14 @@ class JumpKingEnv:
         self.cur_window = int(cur_window)
         self.cur_advance_rate = float(cur_advance_rate)
         self.cur_target_p_bottom = float(cur_target_p_bottom)
+        # Ranking key, easiest first: level, then VALIDATOR SCORE (a state the
+        # BFS proved is d actions from the exit beats any unproven one -- pure
+        # height misleads on levels where the route goes down before up), then
+        # height as the tie-breaker for unscored states.
         self._cp_ranked = sorted(
             self._start_pool,
             key=lambda s: (self._state_field(s, "level", "current_level", default=0) * 100000
+                           + float(s.get("score", 0.0) if isinstance(s, dict) else 0.0) * 1000
                            - self._state_field(s, "y", "rect_y", default=0)),
             reverse=True)                      # easiest (closest to goal) first
         self._unlocked = 1 if self._cp_ranked else 0   # how many easy checkpoints are live
@@ -191,6 +202,7 @@ class JumpKingEnv:
         self._prev_level = 0
         self._episode_start_level = 0
         self._best_alt = 0.0
+        self._episode_return = 0.0
 
     # ------------------------------------------------------------------ setup
     def _build_action_table(self):
@@ -201,6 +213,11 @@ class JumpKingEnv:
                 self.actions.append(("jump", d, c))
         self.actions.append(("walk", "left", self.walk_frames))
         self.actions.append(("walk", "right", self.walk_frames))
+        if self.fine_walk_frames > 0:
+            # Micro-steps (~1.4 px/frame): lets the agent position itself into
+            # launch windows narrower than the normal walk stride (~14 px).
+            self.actions.append(("walk", "left", self.fine_walk_frames))
+            self.actions.append(("walk", "right", self.fine_walk_frames))
 
     # ------------------------------------------------------------- curriculum
     def _load_start_states(self, path):
@@ -260,7 +277,16 @@ class JumpKingEnv:
         # plain mode
         if self.rng.random() < self.p_bottom:
             return None
-        idx = int(self.rng.integers(len(self._start_pool)))
+        # If states carry a 'score' (reach-exit depth from
+        # Validate_Start_States.py), favour checkpoints that actually lead
+        # onward over dead ends. Falls back to uniform when no scores present.
+        scores = np.array(
+            [float(s.get("score", 1.0)) if isinstance(s, dict) else 1.0
+             for s in self._start_pool], dtype=np.float64)
+        if scores.sum() <= 0:
+            idx = int(self.rng.integers(len(self._start_pool)))
+        else:
+            idx = int(self.rng.choice(len(self._start_pool), p=scores / scores.sum()))
         return self._start_pool[idx]
 
     def _maybe_bank_frontier(self):
@@ -428,6 +454,47 @@ class JumpKingEnv:
         ], dtype=np.float32)
         return np.concatenate([grid.ravel(), scalars]).astype(np.float32)
 
+    # ---------------------------------------------------------------- teleport
+    def teleport(self, level, x=None, y=None):
+        """THE canonical way to place the King anywhere. Everything that moves
+        him (reset, the validator, the prober, future explorers) must go
+        through here, so grounding behaves identically everywhere.
+
+        Fully resets the King's physics state (flags, momentum, charge),
+        positions him, then marks him airborne and runs physics until he is
+        grounded and settled -- so a point captured slightly above a platform
+        lands on it instead of spawning half-clipped with stale flags.
+
+        Returns the settled (level, x, y), which may differ from the request
+        (e.g. a bad point that slides off a ledge)."""
+        self.king.reset()
+        self.levels.reset()
+
+        os.environ["start"] = "1"
+        os.environ["gaming"] = "1"
+        os.environ["pause"] = ""
+        os.environ["active"] = "1"
+        os.environ["mode"] = "normal"
+
+        self.levels.current_level = int(level)
+        if x is not None:
+            self.king.rect_x = float(x)
+        if y is not None:
+            self.king.rect_y = float(y)
+
+        self._set_keys()
+        # Airborne with zero momentum: gravity grounds him onto whatever is
+        # below, and _check_events stays skipped until he has truly landed.
+        self.king.isFalling = True
+        frames = 0
+        while (not self.move_available()
+               and frames < self.max_settle_frames
+               and not self.levels.ending):
+            self._physics_frame()
+            frames += 1
+        return (self.levels.current_level,
+                int(self.king.rect_x), int(self.king.rect_y))
+
     # ------------------------------------------------------------------- gym
     def reset(self, level=None, rect_x=None, rect_y=None):
         """Reset to a curriculum checkpoint (default) or to an explicit start.
@@ -438,18 +505,8 @@ class JumpKingEnv:
         bottom. Passing any of level/rect_x/rect_y explicitly bypasses the
         curriculum and forces that exact start (back-compatible with old code).
 
-        For level==0 the King's own reset() gives a valid grounded start.
-        For level>0 you MUST have a known-grounded (rect_x, rect_y) -- that's
-        exactly what the captured checkpoints provide."""
-        self.king.reset()
-        self.levels.reset()
-
-        os.environ["start"] = "1"
-        os.environ["gaming"] = "1"
-        os.environ["pause"] = ""
-        os.environ["active"] = "1"
-        os.environ["mode"] = "normal"
-
+        Placement goes through teleport(), which settles the King onto the
+        ground -- so a captured point a few pixels above a platform is fine."""
         explicit = (level is not None or rect_x is not None or rect_y is not None)
         if not explicit:
             s = self._sample_start()
@@ -464,16 +521,15 @@ class JumpKingEnv:
         if level is None:
             level = 0
 
-        self.levels.current_level = int(level)
-        if rect_x is not None:
-            self.king.rect_x = int(rect_x)
-        if rect_y is not None:
-            self.king.rect_y = int(rect_y)
+        settled_level, _, _ = self.teleport(level, rect_x, rect_y)
 
-        self._set_keys()
         self._steps = 0
-        self._prev_level = self.levels.current_level
-        self._episode_start_level = self.levels.current_level   # anchor for the fall rule
+        self._episode_return = 0.0
+        # Anchor the episode on the level he actually SETTLED on, not the one
+        # requested: a checkpoint that slips a level down should not count the
+        # very first step as "fell below start".
+        self._prev_level = settled_level
+        self._episode_start_level = settled_level    # anchor for the fall rule
         self._best_alt = self._altitude()            # best height reached this episode
         return self._obs(), {}
 
@@ -532,6 +588,7 @@ class JumpKingEnv:
 
         banked = self._maybe_bank_frontier()   # grounded-gated; None unless a new spot
 
+        self._episode_return += reward
         info = {"level": self.levels.current_level,
                 "altitude": alt,
                 "x": self.king.rect_x,
@@ -540,6 +597,12 @@ class JumpKingEnv:
                 "from_checkpoint": self._episode_is_curric,
                 "frontier": banked,
                 "curriculum": self.curriculum_status()}
+        if terminated or truncated:
+            # Episode stats for single-env consumers (smoke test, --render
+            # mode); the subprocess vec-env computes its own identical dict.
+            info["episode"] = {"r": self._episode_return,
+                               "l": self._steps,
+                               "level": self.levels.current_level}
         return self._obs(), float(reward), terminated, truncated, info
 
     def close(self):

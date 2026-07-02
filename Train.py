@@ -102,10 +102,12 @@ def env_factory(args):
             p_bottom=args.p_bottom,           # fraction of resets that start at the bottom
             curriculum=args.curriculum,       # reverse easy->hard curriculum
             cur_advance_rate=args.cur_advance_rate,
+            cur_window=args.cur_window,
             cur_target_p_bottom=args.cur_target_p_bottom,
             terminate_on_fall_below_start=args.terminate_on_fall,
             auto_frontier=args.auto_frontier,
             frontier_min_level=args.frontier_min_level,
+            fine_walk_frames=args.fine_walk_frames,
         )
     return _make
 
@@ -121,7 +123,8 @@ def smoke(args):
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=args.goal_level,
                       level_reward=args.level_reward, level_penalty=args.level_penalty,
                       altitude_breadcrumb=args.altitude_breadcrumb,
-                      start_states=args.start_states, p_bottom=args.p_bottom)
+                      start_states=args.start_states, p_bottom=args.p_bottom,
+                      fine_walk_frames=args.fine_walk_frames)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 grid_shape=env.grid_shape, n_scalars=env.n_scalars)
     maybe_resume(agent, args, device)
@@ -171,6 +174,7 @@ def train(args):
     os.makedirs(args.save_dir, exist_ok=True)
     obs = envs.reset()
     global_step = maybe_resume(agent, args, device)
+    run_start_step = global_step   # sps must count THIS run's steps only
     recent_returns, recent_levels, recent_success = [], [], []
     cur_stat = None
     frontier_buffer = []
@@ -218,7 +222,7 @@ def train(args):
             frontier_buffer = []
 
         if update % args.log_every == 0:
-            sps = int(global_step / (time.time() - start))
+            sps = int((global_step - run_start_step) / (time.time() - start))
             mr = np.mean(recent_returns[-100:]) if recent_returns else float("nan")
             ml = np.mean(recent_levels[-100:]) if recent_levels else float("nan")
             mx = max(recent_levels[-100:]) if recent_levels else -1
@@ -265,10 +269,12 @@ def train_visible(args):
                       start_states=args.start_states, p_bottom=args.p_bottom,
                       curriculum=args.curriculum,
                       cur_advance_rate=args.cur_advance_rate,
+                      cur_window=args.cur_window,
                       cur_target_p_bottom=args.cur_target_p_bottom,
                       terminate_on_fall_below_start=args.terminate_on_fall,
                       auto_frontier=args.auto_frontier,
-                      frontier_min_level=args.frontier_min_level)
+                      frontier_min_level=args.frontier_min_level,
+                      fine_walk_frames=args.fine_walk_frames)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 lr=args.lr, gamma=args.gamma, lam=args.lam, clip=args.clip,
                 epochs=args.epochs, minibatches=args.minibatches, ent_coef=args.ent_coef,
@@ -348,8 +354,8 @@ def build_argparser():
     p.add_argument("--goal-level", type=int, default=1,
                    help="terminate+reward on reaching this level (curriculum)")
     p.add_argument("--level-reward", type=float, default=10.0)
-    p.add_argument("--level-penalty", type=float, default=10.0)
-    p.add_argument("--altitude-breadcrumb", type=float, default=0.01)
+    p.add_argument("--level-penalty", type=float, default=0.0)
+    p.add_argument("--altitude-breadcrumb", type=float, default=0.0)
     p.add_argument("--start-states", type=str, default=None,
                    help="path to start_states.json; enables the checkpoint curriculum")
     p.add_argument("--p-bottom", type=float, default=0.2,
@@ -360,6 +366,9 @@ def build_argparser():
                         "checkpoint and unlock harder/lower ones as success rises")
     p.add_argument("--cur-advance-rate", type=float, default=0.6,
                    help="recent success rate that unlocks the next curriculum stage")
+    p.add_argument("--cur-window", type=int, default=30,
+                   help="episodes per curriculum success-rate window (PER WORKER; "
+                        "smaller = faster but noisier unlocking)")
     p.add_argument("--auto-frontier", action="store_true",
                    help="bank grounded high-level states the agent reaches as new "
                         "start states (augments the manual pool; no manual capture needed)")
@@ -372,10 +381,11 @@ def build_argparser():
                    help="write newly banked frontier states to disk every N updates")
     p.add_argument("--cur-target-p-bottom", type=float, default=0.6,
                    help="bottom-start fraction reached once all checkpoints are mastered")
-    p.add_argument("--terminate-on-fall", action="store_true",
+    p.add_argument("--terminate-on-fall", action=argparse.BooleanOptionalAction,
+                   default=True,
                    help="end the episode (as a failure) if the king falls below the "
-                        "level it started this attempt on; with level-N start states "
-                        "this re-anchors the next attempt on level N")
+                        "level it started this attempt on (default ON for per-level "
+                        "models; pass --no-terminate-on-fall for full-climb runs)")
     p.add_argument("--resume", type=str, default=None,
                    help="path to a checkpoint .pt to warm-start from")
     p.add_argument("--reset-opt", action="store_true",
@@ -387,6 +397,12 @@ def build_argparser():
     p.add_argument("--clip", type=float, default=0.2)
     p.add_argument("--epochs", type=int, default=4)
     p.add_argument("--minibatches", type=int, default=4)
+    p.add_argument("--fine-walk-frames", type=int, default=0,
+                   help="if > 0, add a second micro-walk action pair of this many "
+                        "frames (~1.4 px/frame; try 3) so the agent can position "
+                        "into launch windows narrower than the 14 px normal walk. "
+                        "CHANGES the action count: incompatible with old checkpoints, "
+                        "train a fresh model when enabling")
     p.add_argument("--ent-coef", type=float, default=0.04)
     p.add_argument("--log-every", type=int, default=1)
     p.add_argument("--save-every", type=int, default=50)
