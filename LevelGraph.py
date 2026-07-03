@@ -188,17 +188,43 @@ def main():
             assert isinstance(pool, list)
         except (FileNotFoundError, json.JSONDecodeError, AssertionError):
             pool = []
-        seen = {(s["level"], s["x"] // 8, s["y"] // 8) for s in pool}
+        index = {(s["level"], s["x"] // 8, s["y"] // 8): s
+                 for s in pool if isinstance(s, dict)}
         added = 0
         for s in states:
             kk = (s["level"], s["x"] // 8, s["y"] // 8)
-            if kk not in seen:
+            if kk in index:
+                # existing entry lies on the proven path: upgrade its score
+                index[kk]["score"] = max(float(index[kk].get("score", 0.0)),
+                                         s["score"])
+            else:
                 pool.append(s)
-                seen.add(kk)
+                index[kk] = s
                 added += 1
+
+        # Depth-1 scoring pass over the whole pool: any state with a
+        # one-action clear is the top of the reverse curriculum (this is what
+        # grades the pool when the winning path is too short to emit from).
+        rescored = 0
+        for s in pool:
+            if int(s.get("level", -1)) != lvl:
+                continue
+            slvl, sx, sy = env.teleport(lvl, s["x"], s["y"])
+            if slvl != lvl:
+                continue
+            for a in range(env.num_actions):
+                env.reset(level=lvl, rect_x=sx, rect_y=sy)
+                _, _, _t, _tr, info = env.step(a)
+                if info["level"] >= goal:
+                    if float(s.get("score", 0.0)) < 1.0:
+                        s["score"] = 1.0
+                        rescored += 1
+                    break
+
         with open(args.emit_starts, "w") as f:
             json.dump(pool, f, indent=2)
-        print(f"emitted {added} path states into {args.emit_starts}")
+        print(f"emitted {added} path states into {args.emit_starts} "
+              f"({rescored} pool states re-scored to 1.0 by depth-1 check)")
 
     env.close()
 

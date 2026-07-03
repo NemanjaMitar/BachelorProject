@@ -273,16 +273,30 @@ def train(args):
                   f"max_lvl {mx:2d}{cur} | "
                   f"kl {logs['approx_kl']:+.4f} | ent {logs['entropy']:.3f}")
 
-        if update % args.save_every == 0:
-            path = os.path.join(args.save_dir, f"ppo_{global_step}.pt")
-            torch.save({"model": agent.net.state_dict(),
+        ckpt_payload = {"model": agent.net.state_dict(),
                         "opt": agent.opt.state_dict(),
                         "step": global_step,
                         # lets Play/Handoff auto-configure the env action set
                         "action_cfg": {
                             "fine_walk_frames": args.fine_walk_frames,
-                            "extra_charges": list(_parse_charges(args.extra_charges))}},
-                       path)
+                            "extra_charges": list(_parse_charges(args.extra_charges))}}
+
+        # Early stop for the automated pipeline: curriculum fully unlocked and
+        # recent success high enough -> the level is solved, don't burn budget.
+        if (args.stop_at_succ is not None and cur_stat
+                and cur_stat.get("unlocked") == cur_stat.get("total")
+                and len(recent_success) >= 100
+                and float(np.mean(recent_success[-100:])) >= args.stop_at_succ):
+            path = os.path.join(args.save_dir, f"ppo_{global_step}.pt")
+            torch.save(ckpt_payload, path)
+            print(f"EARLY STOP at update {update}: succ "
+                  f"{np.mean(recent_success[-100:]):.2f} >= {args.stop_at_succ} "
+                  f"with curriculum fully unlocked; saved {path}")
+            break
+
+        if update % args.save_every == 0:
+            path = os.path.join(args.save_dir, f"ppo_{global_step}.pt")
+            torch.save(ckpt_payload, path)
             print("saved", path)
 
     envs.close()
@@ -450,6 +464,10 @@ def build_argparser():
                         "into launch windows narrower than the 14 px normal walk. "
                         "CHANGES the action count: incompatible with old checkpoints, "
                         "train a fresh model when enabling")
+    p.add_argument("--stop-at-succ", type=float, default=None,
+                   help="stop training early once the curriculum is fully "
+                        "unlocked and recent success reaches this rate "
+                        "(used by AutoPilot; e.g. 0.85)")
     p.add_argument("--extra-charges", type=str, default="",
                    help="comma list of extra jump charges APPENDED to the "
                         "action table (e.g. 22,24,28,30). Old checkpoints "
