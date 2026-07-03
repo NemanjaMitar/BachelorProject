@@ -1,0 +1,9 @@
+# Jump King RL pipeline -- tested on Python 3.13 / Windows
+# (torch installs the CPU build from PyPI by default on Windows, which is
+#  what the pipeline uses; a CUDA build works too if the other PC has a GPU)
+pygame==2.6.1
+numpy==2.5.0
+torch~=2.12
+cloudpickle==3.1.2
+# pygame 2.6.1 still imports pkg_resources; newer setuptools removed it
+setuptools<81
