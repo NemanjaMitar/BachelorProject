@@ -80,6 +80,11 @@ def main():
     ap.add_argument("--extra-charges", type=str, default="",
                     help="comma list of appended jump charges the model was "
                          "trained with (e.g. 22,24,28,30)")
+    ap.add_argument("--wait-frames", type=str, default="",
+                    help="comma list of wait actions the model was trained "
+                         "with (wind levels)")
+    ap.add_argument("--wind-obs", action="store_true",
+                    help="the model was trained with wind observation")
     args = ap.parse_args()
 
     goal = args.level + 1
@@ -87,10 +92,13 @@ def main():
     device = get_device()
 
     extra = tuple(int(c) for c in args.extra_charges.split(",")) if args.extra_charges else ()
+    wait = tuple(int(c) for c in args.wait_frames.split(",")) if args.wait_frames else ()
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=goal,
                       start_states=args.start_states, p_bottom=0.0,
                       fine_walk_frames=args.fine_walk_frames,
-                      extra_charges=extra)
+                      extra_charges=extra,
+                      wait_frames=wait,
+                      wind_obs=args.wind_obs)
     ckpt = torch.load(args.checkpoint, map_location=device)
     n_act = ckpt["model"]["policy_head.weight"].shape[0]
     if n_act > env.num_actions:
@@ -107,9 +115,24 @@ def main():
     print(f"loaded {args.checkpoint} | level {args.level} -> {goal} | "
           f"{args.episodes} episodes ({'greedy' if args.greedy else 'stochastic'})")
 
+    # Cycle DETERMINISTICALLY through every pool state instead of letting
+    # reset() sample. The score-weighted sampler never picks score-0 states
+    # (the arrivals and hard spots!), which silently turned every previous
+    # evaluation into a test of only the easy states.
+    pool = [s for s in env._start_pool
+            if int(s.get("level", args.level)) == args.level]
+    if not pool:
+        raise SystemExit(f"no level-{args.level} states in {args.start_states}")
+    print(f"cycling through {len(pool)} pool states, "
+          f"{args.episodes} episodes total")
+
     arrivals, succ = [], 0
+    per_state = {}
     for ep in range(args.episodes):
-        obs, _ = env.reset()
+        st0 = pool[ep % len(pool)]
+        key0 = (int(st0["x"]), int(st0["y"]))
+        obs, _ = env.reset(level=args.level,
+                           rect_x=st0["x"], rect_y=st0["y"])
         term = trunc = False
         info = {}
         while not (term or trunc):
@@ -122,14 +145,25 @@ def main():
                     a = int(torch.distributions.Categorical(logits=logits)
                             .sample().item())
             obs, _, term, trunc, info = env.step(a)
-        if info.get("success") and info.get("level", -1) >= goal:
+        ok = bool(info.get("success")) and info.get("level", -1) >= goal
+        s_ok, s_n = per_state.get(key0, (0, 0))
+        per_state[key0] = (s_ok + (1 if ok else 0), s_n + 1)
+        if ok:
             succ += 1
             st = {"level": int(info["level"]),
                   "x": int(info["x"]), "y": int(info["y"])}
-            arrivals.append(st)
-            print(f"  ep {ep:3d}: arrived lvl {st['level']} "
-                  f"x={st['x']} y={st['y']}")
+            # sanity: never bank an off-screen/seam-glitch position
+            if 0 <= st["x"] <= 460 and 0 <= st["y"] <= 340:
+                arrivals.append(st)
+            print(f"  ep {ep:3d}: from ({key0[0]},{key0[1]}) arrived "
+                  f"lvl {st['level']} x={st['x']} y={st['y']}")
     env.close()
+
+    weak = [(k, v) for k, v in sorted(per_state.items()) if v[0] < v[1]]
+    if weak:
+        print("\nWEAK/FAILING start states:")
+        for (x, y), (s_ok, s_n) in weak:
+            print(f"  ({x},{y}): {s_ok}/{s_n} successful")
 
     print(f"\n{succ}/{args.episodes} episodes reached level {goal}, "
           f"{len(arrivals)} arrival states collected")

@@ -1,0 +1,16 @@
+# IDE / editor
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Scratch / logs
+logs/
+*.tmp

@@ -1,0 +1,259 @@
+device: cpu | num_envs: 8
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+upd    1 | step     2048 |   148 sps | ret     0.40 | succ 0.02 | mean_lvl 19.2 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.92 | kl -0.0005 | ent 3.610
+upd    2 | step     4096 |   154 sps | ret     1.20 | succ 0.06 | mean_lvl 19.3 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.99 | kl +0.0009 | ent 3.604
+upd    3 | step     6144 |   152 sps | ret     0.60 | succ 0.03 | mean_lvl 19.2 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.98 | kl +0.0044 | ent 3.582
+upd    4 | step     8192 |   149 sps | ret     2.20 | succ 0.11 | mean_lvl 19.3 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.93 | kl +0.0030 | ent 3.554
+upd    5 | step    10240 |   149 sps | ret     3.00 | succ 0.15 | mean_lvl 19.5 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.9 | kl +0.0069 | ent 3.494
+upd    6 | step    12288 |   146 sps | ret     5.00 | succ 0.25 | mean_lvl 19.8 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.72 | kl +0.0027 | ent 3.429
+upd    7 | step    14336 |   144 sps | ret     4.40 | succ 0.22 | mean_lvl 19.6 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.76 | kl +0.0048 | ent 3.336
+upd    8 | step    16384 |   139 sps | ret     8.20 | succ 0.41 | mean_lvl 20.2 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.58 | kl -0.0000 | ent 3.302
+upd    9 | step    18432 |   137 sps | ret     7.60 | succ 0.38 | mean_lvl 20.2 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.46 | kl +0.0015 | ent 3.256
+upd   10 | step    20480 |   135 sps | ret     7.00 | succ 0.35 | mean_lvl 20.0 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.52 | kl -0.0003 | ent 3.196
+upd   11 | step    22528 |   132 sps | ret     7.60 | succ 0.38 | mean_lvl 20.1 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.68 | kl +0.0014 | ent 3.125
+upd   12 | step    24576 |   130 sps | ret    10.80 | succ 0.54 | mean_lvl 20.6 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.42 | kl +0.0038 | ent 3.028
+upd   13 | step    26624 |   129 sps | ret    13.00 | succ 0.65 | mean_lvl 21.0 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.49 | kl +0.0004 | ent 2.869
+upd   14 | step    28672 |   127 sps | ret    14.00 | succ 0.70 | mean_lvl 21.0 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.23 | kl +0.0010 | ent 2.713
+upd   15 | step    30720 |   125 sps | ret    10.60 | succ 0.53 | mean_lvl 20.6 | max_lvl 22 | cur 1/8 pb 0.0 | focus (292,80) f=0.1 | kl +0.0008 | ent 2.599
+upd   16 | step    32768 |   122 sps | ret     5.80 | succ 0.29 | mean_lvl 19.9 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=1.0 | kl +0.0006 | ent 2.544
+upd   17 | step    34816 |   119 sps | ret     3.00 | succ 0.15 | mean_lvl 19.5 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=1.0 | kl +0.0002 | ent 2.475
+upd   18 | step    36864 |   117 sps | ret     2.20 | succ 0.11 | mean_lvl 19.4 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=1.0 | kl +0.0033 | ent 2.665
+upd   19 | step    38912 |   114 sps | ret     4.20 | succ 0.21 | mean_lvl 19.6 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.83 | kl +0.0015 | ent 2.757
+upd   20 | step    40960 |   113 sps | ret     2.20 | succ 0.11 | mean_lvl 19.3 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=1.0 | kl +0.0028 | ent 2.893
+upd   21 | step    43008 |   112 sps | ret     3.60 | succ 0.18 | mean_lvl 19.6 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.95 | kl +0.0001 | ent 2.931
+upd   22 | step    45056 |   110 sps | ret     4.00 | succ 0.20 | mean_lvl 19.7 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.95 | kl +0.0062 | ent 3.079
+upd   23 | step    47104 |   109 sps | ret     3.00 | succ 0.15 | mean_lvl 19.5 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=1.0 | kl +0.0045 | ent 3.129
+upd   24 | step    49152 |   109 sps | ret     3.80 | succ 0.19 | mean_lvl 19.7 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.98 | kl +0.0034 | ent 3.198
+upd   25 | step    51200 |   108 sps | ret     4.20 | succ 0.21 | mean_lvl 19.7 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.9 | kl +0.0020 | ent 3.108
+upd   26 | step    53248 |   107 sps | ret     5.40 | succ 0.27 | mean_lvl 19.9 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.84 | kl +0.0010 | ent 3.198
+upd   27 | step    55296 |   106 sps | ret     5.60 | succ 0.28 | mean_lvl 19.9 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.91 | kl +0.0034 | ent 3.146
+upd   28 | step    57344 |   106 sps | ret     5.60 | succ 0.28 | mean_lvl 19.9 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.71 | kl +0.0004 | ent 3.110
+upd   29 | step    59392 |   106 sps | ret     9.00 | succ 0.45 | mean_lvl 20.4 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.78 | kl +0.0031 | ent 3.045
+upd   30 | step    61440 |   106 sps | ret     8.40 | succ 0.42 | mean_lvl 20.3 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.62 | kl +0.0010 | ent 2.871
+upd   31 | step    63488 |   105 sps | ret    11.00 | succ 0.55 | mean_lvl 20.7 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.63 | kl +0.0030 | ent 2.724
+upd   32 | step    65536 |   105 sps | ret     9.80 | succ 0.49 | mean_lvl 20.5 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.55 | kl +0.0038 | ent 2.523
+upd   33 | step    67584 |   105 sps | ret    12.40 | succ 0.62 | mean_lvl 20.9 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.36 | kl +0.0013 | ent 2.324
+upd   34 | step    69632 |   105 sps | ret    13.60 | succ 0.68 | mean_lvl 21.1 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.46 | kl +0.0019 | ent 2.078
+upd   35 | step    71680 |   105 sps | ret    14.40 | succ 0.72 | mean_lvl 21.3 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.4 | kl +0.0034 | ent 1.889
+upd   36 | step    73728 |   105 sps | ret    14.00 | succ 0.70 | mean_lvl 21.1 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.31 | kl +0.0016 | ent 1.788
+upd   37 | step    75776 |   104 sps | ret    14.80 | succ 0.74 | mean_lvl 21.2 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.38 | kl +0.0012 | ent 1.763
+upd   38 | step    77824 |   104 sps | ret    15.80 | succ 0.79 | mean_lvl 21.4 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.44 | kl +0.0023 | ent 1.732
+upd   39 | step    79872 |   104 sps | ret    13.00 | succ 0.65 | mean_lvl 21.0 | max_lvl 22 | cur 2/8 pb 0.0 | focus (122,168) f=0.23 | kl +0.0007 | ent 1.615
+upd   40 | step    81920 |   104 sps | ret    13.40 | succ 0.67 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0012 | ent 1.643
+upd   41 | step    83968 |   104 sps | ret    11.40 | succ 0.57 | mean_lvl 20.8 | max_lvl 22 | cur 2/8 pb 0.0 | focus (292,80) f=0.1 | kl +0.0089 | ent 1.769
+upd   42 | step    86016 |   104 sps | ret     8.60 | succ 0.43 | mean_lvl 20.4 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0037 | ent 2.173
+upd   43 | step    88064 |   104 sps | ret     6.00 | succ 0.30 | mean_lvl 20.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0067 | ent 2.432
+upd   44 | step    90112 |   104 sps | ret     5.80 | succ 0.29 | mean_lvl 20.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0028 | ent 2.554
+upd   45 | step    92160 |   104 sps | ret     3.40 | succ 0.17 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0034 | ent 2.705
+upd   46 | step    94208 |   104 sps | ret     5.40 | succ 0.27 | mean_lvl 19.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0183 | ent 2.891
+upd   47 | step    96256 |   104 sps | ret     7.60 | succ 0.38 | mean_lvl 20.3 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0080 | ent 2.820
+upd   48 | step    98304 |   104 sps | ret     3.60 | succ 0.18 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0056 | ent 3.216
+upd   49 | step   100352 |   104 sps | ret     4.00 | succ 0.20 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0074 | ent 3.226
+upd   50 | step   102400 |   104 sps | ret     4.20 | succ 0.21 | mean_lvl 19.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0056 | ent 3.228
+saved checkpoints/L21\ppo_102400.pt
+upd   51 | step   104448 |   105 sps | ret     4.00 | succ 0.20 | mean_lvl 19.8 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0057 | ent 3.194
+upd   52 | step   106496 |   105 sps | ret     5.20 | succ 0.26 | mean_lvl 19.8 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0065 | ent 3.275
+upd   53 | step   108544 |   105 sps | ret     4.60 | succ 0.23 | mean_lvl 19.8 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0036 | ent 3.244
+upd   54 | step   110592 |   105 sps | ret     4.00 | succ 0.20 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0065 | ent 3.219
+upd   55 | step   112640 |   105 sps | ret     6.40 | succ 0.32 | mean_lvl 20.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0068 | ent 3.185
+upd   56 | step   114688 |   105 sps | ret     3.40 | succ 0.17 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0066 | ent 3.230
+upd   57 | step   116736 |   105 sps | ret     4.80 | succ 0.24 | mean_lvl 19.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0049 | ent 3.272
+upd   58 | step   118784 |   105 sps | ret     3.60 | succ 0.18 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0048 | ent 3.312
+upd   59 | step   120832 |   105 sps | ret     4.80 | succ 0.24 | mean_lvl 19.8 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0054 | ent 3.301
+upd   60 | step   122880 |   105 sps | ret     3.80 | succ 0.19 | mean_lvl 19.5 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0044 | ent 3.330
+upd   61 | step   124928 |   105 sps | ret     3.40 | succ 0.17 | mean_lvl 19.4 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0016 | ent 3.348
+upd   62 | step   126976 |   105 sps | ret     5.00 | succ 0.25 | mean_lvl 19.8 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0002 | ent 3.265
+upd   63 | step   129024 |   105 sps | ret     4.20 | succ 0.21 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0081 | ent 3.217
+upd   64 | step   131072 |   105 sps | ret     4.40 | succ 0.22 | mean_lvl 19.8 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0043 | ent 3.245
+upd   65 | step   133120 |   106 sps | ret     4.20 | succ 0.21 | mean_lvl 19.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0051 | ent 3.302
+upd   66 | step   135168 |   106 sps | ret     5.00 | succ 0.25 | mean_lvl 19.8 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0017 | ent 3.262
+upd   67 | step   137216 |   106 sps | ret     4.00 | succ 0.20 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0034 | ent 3.308
+upd   68 | step   139264 |   106 sps | ret     4.20 | succ 0.21 | mean_lvl 19.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0022 | ent 3.284
+upd   69 | step   141312 |   106 sps | ret     4.20 | succ 0.21 | mean_lvl 19.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0074 | ent 3.322
+upd   70 | step   143360 |   106 sps | ret     4.00 | succ 0.20 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0113 | ent 3.355
+upd   71 | step   145408 |   106 sps | ret     2.40 | succ 0.12 | mean_lvl 19.4 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0191 | ent 3.392
+upd   72 | step   147456 |   106 sps | ret     3.40 | succ 0.17 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.99 | kl +0.0051 | ent 3.414
+upd   73 | step   149504 |   106 sps | ret     3.80 | succ 0.19 | mean_lvl 19.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0135 | ent 3.439
+upd   74 | step   151552 |   107 sps | ret     3.20 | succ 0.16 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0090 | ent 3.418
+upd   75 | step   153600 |   107 sps | ret     4.00 | succ 0.20 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0033 | ent 3.422
+upd   76 | step   155648 |   108 sps | ret     3.80 | succ 0.19 | mean_lvl 19.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0052 | ent 3.410
+upd   77 | step   157696 |   108 sps | ret     4.80 | succ 0.24 | mean_lvl 19.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0034 | ent 3.385
+upd   78 | step   159744 |   109 sps | ret     4.60 | succ 0.23 | mean_lvl 19.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl -0.0003 | ent 3.391
+upd   79 | step   161792 |   109 sps | ret     2.80 | succ 0.14 | mean_lvl 19.5 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0162 | ent 3.377
+upd   80 | step   163840 |   110 sps | ret     4.80 | succ 0.24 | mean_lvl 20.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0022 | ent 3.322
+upd   81 | step   165888 |   110 sps | ret     5.40 | succ 0.27 | mean_lvl 20.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.99 | kl +0.0024 | ent 3.323
+upd   82 | step   167936 |   111 sps | ret     3.60 | succ 0.18 | mean_lvl 20.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0003 | ent 3.339
+upd   83 | step   169984 |   111 sps | ret     4.20 | succ 0.21 | mean_lvl 20.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0022 | ent 3.301
+upd   84 | step   172032 |   112 sps | ret     4.60 | succ 0.23 | mean_lvl 20.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.92 | kl +0.0011 | ent 3.281
+upd   85 | step   174080 |   112 sps | ret     5.60 | succ 0.28 | mean_lvl 20.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0016 | ent 3.257
+upd   86 | step   176128 |   113 sps | ret     4.20 | succ 0.21 | mean_lvl 20.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.95 | kl +0.0056 | ent 3.236
+upd   87 | step   178176 |   113 sps | ret     4.60 | succ 0.23 | mean_lvl 20.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.98 | kl +0.0044 | ent 3.208
+upd   88 | step   180224 |   114 sps | ret     4.40 | succ 0.22 | mean_lvl 20.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0047 | ent 3.263
+upd   89 | step   182272 |   115 sps | ret     4.20 | succ 0.21 | mean_lvl 20.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0175 | ent 3.293
+upd   90 | step   184320 |   115 sps | ret     4.40 | succ 0.22 | mean_lvl 20.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.94 | kl +0.0033 | ent 3.282
+upd   91 | step   186368 |   116 sps | ret     4.80 | succ 0.24 | mean_lvl 20.4 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0010 | ent 3.247
+upd   92 | step   188416 |   116 sps | ret     4.80 | succ 0.24 | mean_lvl 20.4 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.98 | kl +0.0074 | ent 3.257
+upd   93 | step   190464 |   117 sps | ret     4.60 | succ 0.23 | mean_lvl 20.3 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0017 | ent 3.226
+upd   94 | step   192512 |   117 sps | ret     4.80 | succ 0.24 | mean_lvl 20.4 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0049 | ent 3.259
+upd   95 | step   194560 |   118 sps | ret     3.00 | succ 0.15 | mean_lvl 20.3 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0037 | ent 3.276
+upd   96 | step   196608 |   118 sps | ret     2.80 | succ 0.14 | mean_lvl 20.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0032 | ent 3.265
+upd   97 | step   198656 |   119 sps | ret     5.00 | succ 0.25 | mean_lvl 20.4 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0028 | ent 3.230
+upd   98 | step   200704 |   119 sps | ret     6.20 | succ 0.31 | mean_lvl 20.5 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0020 | ent 3.225
+upd   99 | step   202752 |   120 sps | ret     6.00 | succ 0.30 | mean_lvl 20.5 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.98 | kl +0.0067 | ent 3.207
+upd  100 | step   204800 |   120 sps | ret     6.40 | succ 0.32 | mean_lvl 20.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.88 | kl +0.0026 | ent 3.223
+saved checkpoints/L21\ppo_204800.pt
+upd  101 | step   206848 |   121 sps | ret     5.80 | succ 0.29 | mean_lvl 20.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.84 | kl +0.0010 | ent 3.225
+upd  102 | step   208896 |   121 sps | ret     4.80 | succ 0.24 | mean_lvl 20.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.98 | kl +0.0065 | ent 3.232
+upd  103 | step   210944 |   122 sps | ret     4.60 | succ 0.23 | mean_lvl 20.6 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.95 | kl +0.0064 | ent 3.261
+upd  104 | step   212992 |   122 sps | ret     4.00 | succ 0.20 | mean_lvl 20.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.97 | kl -0.0004 | ent 3.266
+upd  105 | step   215040 |   123 sps | ret     4.20 | succ 0.21 | mean_lvl 20.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0076 | ent 3.285
+upd  106 | step   217088 |   123 sps | ret     4.40 | succ 0.22 | mean_lvl 20.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.98 | kl +0.0026 | ent 3.266
+upd  107 | step   219136 |   124 sps | ret     5.20 | succ 0.26 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.98 | kl +0.0050 | ent 3.273
+upd  108 | step   221184 |   124 sps | ret     5.00 | succ 0.25 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0063 | ent 3.302
+upd  109 | step   223232 |   125 sps | ret     4.40 | succ 0.22 | mean_lvl 20.8 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0023 | ent 3.277
+upd  110 | step   225280 |   125 sps | ret     4.20 | succ 0.21 | mean_lvl 20.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0066 | ent 3.281
+upd  111 | step   227328 |   125 sps | ret     4.40 | succ 0.22 | mean_lvl 20.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0068 | ent 3.290
+upd  112 | step   229376 |   126 sps | ret     4.40 | succ 0.22 | mean_lvl 20.7 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0031 | ent 3.272
+upd  113 | step   231424 |   126 sps | ret     4.20 | succ 0.21 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0054 | ent 3.283
+upd  114 | step   233472 |   127 sps | ret     3.40 | succ 0.17 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.96 | kl +0.0056 | ent 3.290
+upd  115 | step   235520 |   127 sps | ret     3.40 | succ 0.17 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.98 | kl +0.0116 | ent 3.283
+upd  116 | step   237568 |   128 sps | ret     3.60 | succ 0.18 | mean_lvl 20.8 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0048 | ent 3.263
+upd  117 | step   239616 |   128 sps | ret     4.60 | succ 0.23 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0056 | ent 3.251
+upd  118 | step   241664 |   129 sps | ret     4.80 | succ 0.24 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0108 | ent 3.238
+upd  119 | step   243712 |   129 sps | ret     4.40 | succ 0.22 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0038 | ent 3.263
+upd  120 | step   245760 |   130 sps | ret     5.60 | succ 0.28 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0021 | ent 3.254
+upd  121 | step   247808 |   130 sps | ret     5.60 | succ 0.28 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0165 | ent 3.271
+upd  122 | step   249856 |   130 sps | ret     6.60 | succ 0.33 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0028 | ent 3.218
+upd  123 | step   251904 |   131 sps | ret     4.80 | succ 0.24 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0024 | ent 3.254
+upd  124 | step   253952 |   131 sps | ret     4.60 | succ 0.23 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0009 | ent 3.219
+upd  125 | step   256000 |   131 sps | ret     4.20 | succ 0.21 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0083 | ent 3.203
+upd  126 | step   258048 |   132 sps | ret     5.00 | succ 0.25 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0083 | ent 3.182
+upd  127 | step   260096 |   132 sps | ret     4.60 | succ 0.23 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0220 | ent 3.207
+upd  128 | step   262144 |   132 sps | ret     4.20 | succ 0.21 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0014 | ent 3.197
+upd  129 | step   264192 |   133 sps | ret     4.60 | succ 0.23 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0031 | ent 3.204
+upd  130 | step   266240 |   133 sps | ret     4.60 | succ 0.23 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0144 | ent 3.197
+upd  131 | step   268288 |   133 sps | ret     4.80 | succ 0.24 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0132 | ent 3.207
+upd  132 | step   270336 |   134 sps | ret     3.80 | succ 0.19 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0021 | ent 3.225
+upd  133 | step   272384 |   134 sps | ret     3.60 | succ 0.18 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0024 | ent 3.231
+upd  134 | step   274432 |   135 sps | ret     3.60 | succ 0.18 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0079 | ent 3.209
+upd  135 | step   276480 |   135 sps | ret     4.20 | succ 0.21 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0030 | ent 3.188
+upd  136 | step   278528 |   135 sps | ret     3.60 | succ 0.18 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0079 | ent 3.194
+upd  137 | step   280576 |   136 sps | ret     3.60 | succ 0.18 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0053 | ent 3.184
+upd  138 | step   282624 |   136 sps | ret     3.00 | succ 0.15 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0021 | ent 3.218
+upd  139 | step   284672 |   136 sps | ret     3.20 | succ 0.16 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0043 | ent 3.269
+upd  140 | step   286720 |   137 sps | ret     3.40 | succ 0.17 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0040 | ent 3.279
+upd  141 | step   288768 |   137 sps | ret     3.00 | succ 0.15 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0060 | ent 3.286
+upd  142 | step   290816 |   137 sps | ret     4.00 | succ 0.20 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0042 | ent 3.253
+upd  143 | step   292864 |   138 sps | ret     3.60 | succ 0.18 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0085 | ent 3.254
+upd  144 | step   294912 |   138 sps | ret     5.60 | succ 0.28 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0005 | ent 3.225
+upd  145 | step   296960 |   138 sps | ret     6.20 | succ 0.31 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.9 | kl +0.0014 | ent 3.250
+upd  146 | step   299008 |   139 sps | ret     5.00 | succ 0.25 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0146 | ent 3.271
+upd  147 | step   301056 |   139 sps | ret     4.80 | succ 0.24 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.87 | kl +0.0037 | ent 3.255
+upd  148 | step   303104 |   139 sps | ret     3.00 | succ 0.15 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0057 | ent 3.292
+upd  149 | step   305152 |   140 sps | ret     3.00 | succ 0.15 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.94 | kl +0.0118 | ent 3.289
+upd  150 | step   307200 |   140 sps | ret     2.60 | succ 0.13 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0124 | ent 3.269
+saved checkpoints/L21\ppo_307200.pt
+upd  151 | step   309248 |   140 sps | ret     3.60 | succ 0.18 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0035 | ent 3.292
+upd  152 | step   311296 |   141 sps | ret     3.60 | succ 0.18 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0080 | ent 3.314
+upd  153 | step   313344 |   141 sps | ret     4.40 | succ 0.22 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0060 | ent 3.303
+upd  154 | step   315392 |   141 sps | ret     4.60 | succ 0.23 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0015 | ent 3.295
+upd  155 | step   317440 |   141 sps | ret     4.40 | succ 0.22 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0018 | ent 3.325
+upd  156 | step   319488 |   142 sps | ret     4.20 | succ 0.21 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.99 | kl +0.0103 | ent 3.322
+upd  157 | step   321536 |   142 sps | ret     4.00 | succ 0.20 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0034 | ent 3.293
+upd  158 | step   323584 |   142 sps | ret     5.20 | succ 0.26 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0018 | ent 3.272
+upd  159 | step   325632 |   142 sps | ret     5.80 | succ 0.29 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0078 | ent 3.280
+upd  160 | step   327680 |   143 sps | ret     5.20 | succ 0.26 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0054 | ent 3.271
+upd  161 | step   329728 |   143 sps | ret     4.40 | succ 0.22 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0067 | ent 3.278
+upd  162 | step   331776 |   143 sps | ret     4.20 | succ 0.21 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0047 | ent 3.280
+upd  163 | step   333824 |   144 sps | ret     3.60 | succ 0.18 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0040 | ent 3.279
+upd  164 | step   335872 |   144 sps | ret     3.40 | succ 0.17 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0034 | ent 3.292
+upd  165 | step   337920 |   144 sps | ret     4.20 | succ 0.21 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0038 | ent 3.281
+upd  166 | step   339968 |   144 sps | ret     5.60 | succ 0.28 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0019 | ent 3.236
+upd  167 | step   342016 |   144 sps | ret     5.80 | succ 0.29 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0067 | ent 3.265
+upd  168 | step   344064 |   144 sps | ret     5.60 | succ 0.28 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0011 | ent 3.269
+upd  169 | step   346112 |   145 sps | ret     4.40 | succ 0.22 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0048 | ent 3.265
+upd  170 | step   348160 |   145 sps | ret     4.20 | succ 0.21 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0056 | ent 3.233
+upd  171 | step   350208 |   145 sps | ret     3.80 | succ 0.19 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0041 | ent 3.230
+upd  172 | step   352256 |   145 sps | ret     4.20 | succ 0.21 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0037 | ent 3.256
+upd  173 | step   354304 |   145 sps | ret     4.20 | succ 0.21 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0007 | ent 3.256
+upd  174 | step   356352 |   146 sps | ret     3.80 | succ 0.19 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0065 | ent 3.262
+upd  175 | step   358400 |   146 sps | ret     4.20 | succ 0.21 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0004 | ent 3.252
+upd  176 | step   360448 |   146 sps | ret     4.00 | succ 0.20 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0018 | ent 3.273
+upd  177 | step   362496 |   146 sps | ret     3.60 | succ 0.18 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0032 | ent 3.284
+upd  178 | step   364544 |   147 sps | ret     3.00 | succ 0.15 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0085 | ent 3.264
+upd  179 | step   366592 |   147 sps | ret     3.20 | succ 0.16 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0096 | ent 3.287
+upd  180 | step   368640 |   147 sps | ret     4.00 | succ 0.20 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0028 | ent 3.297
+upd  181 | step   370688 |   147 sps | ret     2.80 | succ 0.14 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0019 | ent 3.305
+upd  182 | step   372736 |   148 sps | ret     3.00 | succ 0.15 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0062 | ent 3.286
+upd  183 | step   374784 |   148 sps | ret     2.60 | succ 0.13 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0071 | ent 3.268
+upd  184 | step   376832 |   148 sps | ret     3.80 | succ 0.19 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0022 | ent 3.276
+upd  185 | step   378880 |   148 sps | ret     4.40 | succ 0.22 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0051 | ent 3.277
+upd  186 | step   380928 |   148 sps | ret     4.60 | succ 0.23 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0101 | ent 3.273
+upd  187 | step   382976 |   148 sps | ret     4.60 | succ 0.23 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0090 | ent 3.284
+upd  188 | step   385024 |   149 sps | ret     3.60 | succ 0.18 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0067 | ent 3.297
+upd  189 | step   387072 |   149 sps | ret     4.40 | succ 0.22 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0032 | ent 3.263
+upd  190 | step   389120 |   149 sps | ret     5.20 | succ 0.26 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0020 | ent 3.264
+upd  191 | step   391168 |   149 sps | ret     5.40 | succ 0.27 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0087 | ent 3.271
+upd  192 | step   393216 |   149 sps | ret     4.60 | succ 0.23 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0059 | ent 3.246
+upd  193 | step   395264 |   149 sps | ret     4.80 | succ 0.24 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0030 | ent 3.251
+upd  194 | step   397312 |   150 sps | ret     5.00 | succ 0.25 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.91 | kl +0.0044 | ent 3.264
+upd  195 | step   399360 |   150 sps | ret     4.80 | succ 0.24 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0078 | ent 3.268
+upd  196 | step   401408 |   150 sps | ret     4.40 | succ 0.22 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0068 | ent 3.286
+upd  197 | step   403456 |   150 sps | ret     4.20 | succ 0.21 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0052 | ent 3.263
+upd  198 | step   405504 |   150 sps | ret     3.60 | succ 0.18 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0041 | ent 3.283
+upd  199 | step   407552 |   150 sps | ret     3.00 | succ 0.15 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0027 | ent 3.284
+upd  200 | step   409600 |   150 sps | ret     2.40 | succ 0.12 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0086 | ent 3.302
+saved checkpoints/L21\ppo_409600.pt
+upd  201 | step   411648 |   151 sps | ret     3.00 | succ 0.15 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0049 | ent 3.309
+upd  202 | step   413696 |   151 sps | ret     3.00 | succ 0.15 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0029 | ent 3.304
+upd  203 | step   415744 |   151 sps | ret     2.80 | succ 0.14 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0042 | ent 3.315
+upd  204 | step   417792 |   151 sps | ret     2.60 | succ 0.13 | mean_lvl 20.9 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0053 | ent 3.325
+upd  205 | step   419840 |   151 sps | ret     3.40 | succ 0.17 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0028 | ent 3.304
+upd  206 | step   421888 |   151 sps | ret     4.60 | succ 0.23 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0007 | ent 3.298
+upd  207 | step   423936 |   152 sps | ret     4.60 | succ 0.23 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0092 | ent 3.295
+upd  208 | step   425984 |   152 sps | ret     4.40 | succ 0.22 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0095 | ent 3.296
+upd  209 | step   428032 |   152 sps | ret     2.80 | succ 0.14 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.97 | kl +0.0002 | ent 3.287
+upd  210 | step   430080 |   152 sps | ret     3.40 | succ 0.17 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0007 | ent 3.275
+upd  211 | step   432128 |   152 sps | ret     3.20 | succ 0.16 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0032 | ent 3.263
+upd  212 | step   434176 |   152 sps | ret     4.60 | succ 0.23 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0012 | ent 3.255
+upd  213 | step   436224 |   153 sps | ret     4.00 | succ 0.20 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0089 | ent 3.281
+upd  214 | step   438272 |   153 sps | ret     3.40 | succ 0.17 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0020 | ent 3.284
+upd  215 | step   440320 |   153 sps | ret     3.20 | succ 0.16 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0035 | ent 3.282
+upd  216 | step   442368 |   153 sps | ret     2.60 | succ 0.13 | mean_lvl 21.0 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0030 | ent 3.310
+upd  217 | step   444416 |   153 sps | ret     3.40 | succ 0.17 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0015 | ent 3.307
+upd  218 | step   446464 |   153 sps | ret     3.00 | succ 0.15 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0057 | ent 3.318
+upd  219 | step   448512 |   153 sps | ret     4.60 | succ 0.23 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0030 | ent 3.276
+upd  220 | step   450560 |   154 sps | ret     4.40 | succ 0.22 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=0.94 | kl +0.0110 | ent 3.299
+upd  221 | step   452608 |   154 sps | ret     4.60 | succ 0.23 | mean_lvl 21.2 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0043 | ent 3.298
+upd  222 | step   454656 |   154 sps | ret     4.00 | succ 0.20 | mean_lvl 21.1 | max_lvl 22 | cur 3/8 pb 0.0 | focus (18,208) f=1.0 | kl +0.0074 | ent 3.277

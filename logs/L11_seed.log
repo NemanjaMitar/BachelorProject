@@ -1,0 +1,8 @@
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+  rejected (121,321): trapped/no useful moves
+  rejected (180,57): trapped/no useful moves
+level 11: 24 stable spots found, keeping 8 escapable spread seeds
+merged 8 new seeds into starts_L11.json (10 total)
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists

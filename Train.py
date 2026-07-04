@@ -141,6 +141,8 @@ def env_factory(args):
             frontier_min_level=args.frontier_min_level,
             fine_walk_frames=args.fine_walk_frames,
             extra_charges=_parse_charges(args.extra_charges),
+            wait_frames=_parse_charges(args.wait_frames),
+            wind_obs=args.wind_obs,
         )
     return _make
 
@@ -158,7 +160,9 @@ def smoke(args):
                       altitude_breadcrumb=args.altitude_breadcrumb,
                       start_states=args.start_states, p_bottom=args.p_bottom,
                       fine_walk_frames=args.fine_walk_frames,
-                      extra_charges=_parse_charges(args.extra_charges))
+                      extra_charges=_parse_charges(args.extra_charges),
+                      wait_frames=_parse_charges(args.wait_frames),
+                      wind_obs=args.wind_obs)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 grid_shape=env.grid_shape, n_scalars=env.n_scalars)
     maybe_resume(agent, args, device)
@@ -279,7 +283,9 @@ def train(args):
                         # lets Play/Handoff auto-configure the env action set
                         "action_cfg": {
                             "fine_walk_frames": args.fine_walk_frames,
-                            "extra_charges": list(_parse_charges(args.extra_charges))}}
+                            "extra_charges": list(_parse_charges(args.extra_charges)),
+                            "wait_frames": list(_parse_charges(args.wait_frames)),
+                            "wind_obs": args.wind_obs}}
 
         # Early stop for the automated pipeline: curriculum fully unlocked and
         # recent success high enough -> the level is solved, don't burn budget.
@@ -331,7 +337,9 @@ def train_visible(args):
                       auto_frontier=args.auto_frontier,
                       frontier_min_level=args.frontier_min_level,
                       fine_walk_frames=args.fine_walk_frames,
-                      extra_charges=_parse_charges(args.extra_charges))
+                      extra_charges=_parse_charges(args.extra_charges),
+                      wait_frames=_parse_charges(args.wait_frames),
+                      wind_obs=args.wind_obs)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 lr=args.lr, gamma=args.gamma, lam=args.lam, clip=args.clip,
                 epochs=args.epochs, minibatches=args.minibatches, ent_coef=args.ent_coef,
@@ -399,7 +407,9 @@ def train_visible(args):
                         "opt": agent.opt.state_dict(), "step": global_step,
                         "action_cfg": {
                             "fine_walk_frames": args.fine_walk_frames,
-                            "extra_charges": list(_parse_charges(args.extra_charges))}},
+                            "extra_charges": list(_parse_charges(args.extra_charges)),
+                            "wait_frames": list(_parse_charges(args.wait_frames)),
+                            "wind_obs": args.wind_obs}},
                        path)
             print("saved", path)
     env.close()
@@ -464,6 +474,13 @@ def build_argparser():
                         "into launch windows narrower than the 14 px normal walk. "
                         "CHANGES the action count: incompatible with old checkpoints, "
                         "train a fresh model when enabling")
+    p.add_argument("--wait-frames", type=str, default="",
+                   help="comma list of 'stand still N frames' actions appended "
+                        "to the table (wind levels; e.g. 30,60)")
+    p.add_argument("--wind-obs", action="store_true",
+                   help="append wind-phase sin/cos to the observation and "
+                        "randomize the phase at every reset (levels 25-31). "
+                        "CHANGES obs size: needs a fresh model.")
     p.add_argument("--stop-at-succ", type=float, default=None,
                    help="stop training early once the curriculum is fully "
                         "unlocked and recent success reaches this rate "

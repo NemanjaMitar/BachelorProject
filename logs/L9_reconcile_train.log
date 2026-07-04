@@ -1,0 +1,41 @@
+device: cpu | num_envs: 8
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+resumed from checkpoints/L9\ppo_409600.pt at step 409600 (opt restored)
+upd    1 | step   411648 |    96 sps | ret    20.00 | succ 1.00 | mean_lvl 10.0 | max_lvl 10 | cur 5/16 pb 0.0 | focus (51,161) f=1.0 | kl +0.0177 | ent 1.495
+upd    2 | step   413696 |   101 sps | ret    20.00 | succ 1.00 | mean_lvl 10.0 | max_lvl 10 | cur 7/16 pb 0.0 | focus (182,80) f=0.59 | kl +0.0148 | ent 1.294
+upd    3 | step   415744 |   104 sps | ret    20.00 | succ 1.00 | mean_lvl 10.0 | max_lvl 10 | cur 9/16 pb 0.0 | focus (194,80) f=0.81 | kl +0.0071 | ent 1.219
+upd    4 | step   417792 |   104 sps | ret    19.80 | succ 0.99 | mean_lvl 10.0 | max_lvl 10 | cur 12/16 pb 0.0 | focus (146,209) f=0.53 | kl +0.0147 | ent 1.077
+upd    5 | step   419840 |   105 sps | ret    19.60 | succ 0.98 | mean_lvl 10.0 | max_lvl 10 | cur 15/16 pb 0.0 | focus (402,305) f=0.6 | kl +0.0083 | ent 0.711
+upd    6 | step   421888 |   111 sps | ret    17.80 | succ 0.89 | mean_lvl  9.8 | max_lvl 10 | cur 16/16 pb 0.0 | focus (209,373) f=1.0 | kl +0.0303 | ent 1.219
+EARLY STOP at update 6: succ 0.89 >= 0.85 with curriculum fully unlocked; saved checkpoints/L9\ppo_421888.pt

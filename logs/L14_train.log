@@ -1,0 +1,111 @@
+device: cpu | num_envs: 8
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+upd    1 | step     2048 |   140 sps | ret     3.60 | succ 0.18 | mean_lvl 13.2 | max_lvl 15 | cur 1/10 pb 0.0 | focus (432,55) f=0.99 | kl +0.0051 | ent 3.608
+upd    2 | step     4096 |   139 sps | ret     3.20 | succ 0.16 | mean_lvl 13.2 | max_lvl 15 | cur 1/10 pb 0.0 | focus (432,55) f=0.77 | kl +0.0029 | ent 3.588
+upd    3 | step     6144 |   139 sps | ret     3.00 | succ 0.15 | mean_lvl 13.2 | max_lvl 15 | cur 1/10 pb 0.0 | focus (432,55) f=0.89 | kl +0.0176 | ent 3.512
+upd    4 | step     8192 |   139 sps | ret     7.60 | succ 0.38 | mean_lvl 13.7 | max_lvl 15 | cur 1/10 pb 0.0 | focus (432,55) f=0.79 | kl +0.0099 | ent 3.365
+upd    5 | step    10240 |   139 sps | ret    10.00 | succ 0.50 | mean_lvl 14.0 | max_lvl 15 | cur 1/10 pb 0.0 | focus (432,55) f=0.46 | kl +0.0104 | ent 3.184
+upd    6 | step    12288 |   138 sps | ret    11.20 | succ 0.56 | mean_lvl 14.1 | max_lvl 15 | cur 1/10 pb 0.0 | focus (432,55) f=0.46 | kl +0.0142 | ent 2.873
+upd    7 | step    14336 |   138 sps | ret    11.40 | succ 0.57 | mean_lvl 14.1 | max_lvl 15 | cur 1/10 pb 0.0 | focus (432,55) f=0.44 | kl +0.0080 | ent 2.649
+upd    8 | step    16384 |   136 sps | ret     2.20 | succ 0.11 | mean_lvl 13.0 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0020 | ent 2.430
+upd    9 | step    18432 |   134 sps | ret     2.40 | succ 0.12 | mean_lvl 13.1 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0015 | ent 2.336
+upd   10 | step    20480 |   132 sps | ret     3.00 | succ 0.15 | mean_lvl 13.1 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0018 | ent 2.363
+upd   11 | step    22528 |   131 sps | ret     3.20 | succ 0.16 | mean_lvl 13.1 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0114 | ent 2.607
+upd   12 | step    24576 |   131 sps | ret     3.40 | succ 0.17 | mean_lvl 13.1 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0028 | ent 2.668
+upd   13 | step    26624 |   130 sps | ret     2.60 | succ 0.13 | mean_lvl 13.0 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0009 | ent 2.717
+upd   14 | step    28672 |   130 sps | ret     4.00 | succ 0.20 | mean_lvl 13.2 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0067 | ent 2.603
+upd   15 | step    30720 |   130 sps | ret     3.40 | succ 0.17 | mean_lvl 13.1 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0016 | ent 2.502
+upd   16 | step    32768 |   129 sps | ret     2.40 | succ 0.12 | mean_lvl 13.0 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0008 | ent 2.443
+upd   17 | step    34816 |   128 sps | ret     2.00 | succ 0.10 | mean_lvl 13.0 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0002 | ent 2.529
+upd   18 | step    36864 |   128 sps | ret     1.20 | succ 0.06 | mean_lvl 12.9 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0023 | ent 2.514
+upd   19 | step    38912 |   128 sps | ret     2.20 | succ 0.11 | mean_lvl 13.0 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0019 | ent 2.510
+upd   20 | step    40960 |   128 sps | ret     3.20 | succ 0.16 | mean_lvl 13.1 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0011 | ent 2.710
+upd   21 | step    43008 |   128 sps | ret     3.00 | succ 0.15 | mean_lvl 13.1 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0029 | ent 2.803
+upd   22 | step    45056 |   128 sps | ret     3.80 | succ 0.19 | mean_lvl 13.1 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0039 | ent 3.002
+upd   23 | step    47104 |   128 sps | ret     1.40 | succ 0.07 | mean_lvl 12.8 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0036 | ent 3.105
+upd   24 | step    49152 |   128 sps | ret     2.20 | succ 0.11 | mean_lvl 12.9 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0094 | ent 3.273
+upd   25 | step    51200 |   128 sps | ret     3.80 | succ 0.19 | mean_lvl 13.0 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.91 | kl +0.0027 | ent 3.396
+upd   26 | step    53248 |   128 sps | ret     2.40 | succ 0.12 | mean_lvl 12.9 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.96 | kl +0.0045 | ent 3.454
+upd   27 | step    55296 |   129 sps | ret     2.40 | succ 0.12 | mean_lvl 12.6 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0038 | ent 3.495
+upd   28 | step    57344 |   129 sps | ret     4.40 | succ 0.22 | mean_lvl 12.9 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.96 | kl +0.0066 | ent 3.498
+upd   29 | step    59392 |   130 sps | ret     2.00 | succ 0.10 | mean_lvl 12.6 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=1.0 | kl +0.0031 | ent 3.520
+upd   30 | step    61440 |   130 sps | ret     2.20 | succ 0.11 | mean_lvl 12.7 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.98 | kl +0.0013 | ent 3.513
+upd   31 | step    63488 |   131 sps | ret     1.80 | succ 0.09 | mean_lvl 12.4 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.99 | kl +0.0037 | ent 3.486
+upd   32 | step    65536 |   131 sps | ret     2.60 | succ 0.13 | mean_lvl 12.7 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.93 | kl +0.0030 | ent 3.429
+upd   33 | step    67584 |   132 sps | ret     3.80 | succ 0.19 | mean_lvl 13.0 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.99 | kl +0.0006 | ent 3.371
+upd   34 | step    69632 |   133 sps | ret     3.60 | succ 0.18 | mean_lvl 12.8 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.99 | kl +0.0018 | ent 3.311
+upd   35 | step    71680 |   133 sps | ret     4.60 | succ 0.23 | mean_lvl 12.9 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.9 | kl +0.0022 | ent 3.220
+upd   36 | step    73728 |   134 sps | ret     5.20 | succ 0.26 | mean_lvl 13.1 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.82 | kl +0.0007 | ent 3.078
+upd   37 | step    75776 |   134 sps | ret     7.00 | succ 0.35 | mean_lvl 13.2 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.78 | kl +0.0035 | ent 2.926
+upd   38 | step    77824 |   135 sps | ret     8.00 | succ 0.40 | mean_lvl 13.4 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.51 | kl +0.0004 | ent 2.756
+upd   39 | step    79872 |   135 sps | ret     8.00 | succ 0.40 | mean_lvl 13.4 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.87 | kl +0.0008 | ent 2.644
+upd   40 | step    81920 |   136 sps | ret    10.60 | succ 0.53 | mean_lvl 13.7 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.54 | kl +0.0008 | ent 2.435
+upd   41 | step    83968 |   136 sps | ret    13.20 | succ 0.66 | mean_lvl 14.1 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.44 | kl +0.0027 | ent 2.191
+upd   42 | step    86016 |   137 sps | ret    12.20 | succ 0.61 | mean_lvl 13.9 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.44 | kl +0.0016 | ent 1.971
+upd   43 | step    88064 |   137 sps | ret    12.60 | succ 0.63 | mean_lvl 14.0 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.35 | kl +0.0007 | ent 1.823
+upd   44 | step    90112 |   138 sps | ret    14.60 | succ 0.73 | mean_lvl 14.3 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.29 | kl +0.0006 | ent 1.806
+upd   45 | step    92160 |   138 sps | ret    12.80 | succ 0.64 | mean_lvl 14.0 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.4 | kl +0.0010 | ent 1.733
+upd   46 | step    94208 |   139 sps | ret    14.00 | succ 0.70 | mean_lvl 14.2 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.32 | kl +0.0008 | ent 1.644
+upd   47 | step    96256 |   139 sps | ret    14.40 | succ 0.72 | mean_lvl 14.2 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.26 | kl +0.0007 | ent 1.620
+upd   48 | step    98304 |   139 sps | ret    14.40 | succ 0.72 | mean_lvl 14.2 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.51 | kl +0.0009 | ent 1.598
+upd   49 | step   100352 |   140 sps | ret    14.20 | succ 0.71 | mean_lvl 14.2 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.35 | kl +0.0001 | ent 1.545
+upd   50 | step   102400 |   140 sps | ret    14.40 | succ 0.72 | mean_lvl 14.2 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.4 | kl +0.0000 | ent 1.567
+saved checkpoints/L14\ppo_102400.pt
+upd   51 | step   104448 |   141 sps | ret    17.00 | succ 0.85 | mean_lvl 14.6 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.15 | kl +0.0011 | ent 1.585
+upd   52 | step   106496 |   141 sps | ret    16.00 | succ 0.80 | mean_lvl 14.4 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.23 | kl +0.0035 | ent 1.536
+upd   53 | step   108544 |   141 sps | ret    15.60 | succ 0.78 | mean_lvl 14.4 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.28 | kl +0.0011 | ent 1.456
+upd   54 | step   110592 |   142 sps | ret    14.80 | succ 0.74 | mean_lvl 14.2 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.35 | kl +0.0008 | ent 1.445
+upd   55 | step   112640 |   142 sps | ret    15.60 | succ 0.78 | mean_lvl 14.4 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.32 | kl +0.0005 | ent 1.446
+upd   56 | step   114688 |   142 sps | ret    15.20 | succ 0.76 | mean_lvl 14.4 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.23 | kl +0.0008 | ent 1.446
+upd   57 | step   116736 |   142 sps | ret    14.40 | succ 0.72 | mean_lvl 14.2 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.31 | kl +0.0008 | ent 1.519
+upd   58 | step   118784 |   142 sps | ret    15.60 | succ 0.78 | mean_lvl 14.4 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.17 | kl +0.0008 | ent 1.539
+upd   59 | step   120832 |   142 sps | ret    15.80 | succ 0.79 | mean_lvl 14.4 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.19 | kl +0.0060 | ent 1.497
+upd   60 | step   122880 |   142 sps | ret    14.40 | succ 0.72 | mean_lvl 14.2 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.16 | kl +0.0027 | ent 1.435
+upd   61 | step   124928 |   143 sps | ret    15.60 | succ 0.78 | mean_lvl 14.4 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.24 | kl +0.0010 | ent 1.397
+upd   62 | step   126976 |   143 sps | ret    14.80 | succ 0.74 | mean_lvl 14.3 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.25 | kl +0.0009 | ent 1.433
+upd   63 | step   129024 |   143 sps | ret    14.80 | succ 0.74 | mean_lvl 14.3 | max_lvl 15 | cur 2/10 pb 0.0 | focus (432,55) f=0.06 | kl +0.0024 | ent 1.399
+upd   64 | step   131072 |   143 sps | ret    17.80 | succ 0.89 | mean_lvl 14.7 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.15 | kl +0.0008 | ent 1.446
+upd   65 | step   133120 |   143 sps | ret    16.40 | succ 0.82 | mean_lvl 14.5 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.1 | kl +0.0028 | ent 1.407
+upd   66 | step   135168 |   143 sps | ret    17.20 | succ 0.86 | mean_lvl 14.6 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.25 | kl +0.0020 | ent 1.384
+upd   67 | step   137216 |   143 sps | ret    16.40 | succ 0.82 | mean_lvl 14.5 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.39 | kl +0.0007 | ent 1.414
+upd   68 | step   139264 |   143 sps | ret    16.80 | succ 0.84 | mean_lvl 14.5 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.47 | kl +0.0036 | ent 1.424
+upd   69 | step   141312 |   144 sps | ret    15.40 | succ 0.77 | mean_lvl 14.3 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.15 | kl +0.0023 | ent 1.421
+upd   70 | step   143360 |   144 sps | ret    17.20 | succ 0.86 | mean_lvl 14.6 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.15 | kl +0.0027 | ent 1.390
+upd   71 | step   145408 |   144 sps | ret    16.60 | succ 0.83 | mean_lvl 14.5 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.25 | kl +0.0017 | ent 1.374
+upd   72 | step   147456 |   144 sps | ret    17.00 | succ 0.85 | mean_lvl 14.6 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.16 | kl +0.0019 | ent 1.385
+upd   73 | step   149504 |   144 sps | ret    16.80 | succ 0.84 | mean_lvl 14.6 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.26 | kl +0.0020 | ent 1.403
+upd   74 | step   151552 |   144 sps | ret    16.80 | succ 0.84 | mean_lvl 14.5 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.24 | kl +0.0029 | ent 1.394
+upd   75 | step   153600 |   144 sps | ret    16.60 | succ 0.83 | mean_lvl 14.5 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.29 | kl +0.0063 | ent 1.392
+upd   76 | step   155648 |   144 sps | ret    16.60 | succ 0.83 | mean_lvl 14.5 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.34 | kl +0.0014 | ent 1.385
+upd   77 | step   157696 |   144 sps | ret    15.80 | succ 0.79 | mean_lvl 14.4 | max_lvl 15 | cur 2/10 pb 0.0 | focus (22,56) f=0.21 | kl +0.0018 | ent 1.379

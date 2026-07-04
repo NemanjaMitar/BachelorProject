@@ -1,0 +1,46 @@
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+loaded checkpoints/L11\ppo_483328.pt | level 11 -> 12 | 40 episodes (stochastic)
+  ep   0: arrived lvl 12 x=432 y=321
+  ep   1: arrived lvl 12 x=432 y=321
+  ep   2: arrived lvl 12 x=432 y=321
+  ep   3: arrived lvl 12 x=432 y=321
+  ep   4: arrived lvl 12 x=432 y=321
+  ep   5: arrived lvl 12 x=433 y=321
+  ep   6: arrived lvl 12 x=432 y=321
+  ep   7: arrived lvl 12 x=432 y=321
+  ep   8: arrived lvl 12 x=441 y=321
+  ep   9: arrived lvl 12 x=434 y=321
+  ep  10: arrived lvl 12 x=437 y=321
+  ep  11: arrived lvl 12 x=432 y=321
+  ep  12: arrived lvl 12 x=432 y=321
+  ep  13: arrived lvl 12 x=433 y=321
+  ep  14: arrived lvl 12 x=428 y=321
+  ep  15: arrived lvl 12 x=432 y=321
+  ep  16: arrived lvl 12 x=432 y=321
+  ep  17: arrived lvl 12 x=432 y=321
+  ep  18: arrived lvl 12 x=435 y=321
+  ep  19: arrived lvl 12 x=434 y=321
+  ep  21: arrived lvl 12 x=435 y=321
+  ep  22: arrived lvl 12 x=432 y=321
+  ep  23: arrived lvl 12 x=432 y=321
+  ep  24: arrived lvl 12 x=432 y=321
+  ep  25: arrived lvl 12 x=432 y=321
+  ep  26: arrived lvl 12 x=432 y=321
+  ep  27: arrived lvl 12 x=434 y=321
+  ep  28: arrived lvl 12 x=432 y=321
+  ep  29: arrived lvl 12 x=428 y=321
+  ep  30: arrived lvl 12 x=432 y=321
+  ep  31: arrived lvl 12 x=425 y=321
+  ep  32: arrived lvl 12 x=432 y=321
+  ep  33: arrived lvl 12 x=432 y=321
+  ep  34: arrived lvl 12 x=432 y=321
+  ep  35: arrived lvl 12 x=432 y=321
+  ep  36: arrived lvl 12 x=432 y=321
+  ep  37: arrived lvl 12 x=432 y=321
+  ep  39: arrived lvl 12 x=435 y=321
+
+38/40 episodes reached level 12, 38 arrival states collected
+merged 0 new handoff states into starts_L12.json (rest were duplicates of existing entries)
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists

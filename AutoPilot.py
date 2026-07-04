@@ -38,6 +38,8 @@ import subprocess
 PY = sys.executable
 FWF = "3"                      # frozen project action set for all new levels
 EXTRA = "22,24,28,30"
+WIND_LEVELS = set(range(25, 32))   # weather.py wind_levels: sinusoidal wind
+WAIT = "30,60"                     # wait-action pair used on wind levels
 KNOWN_ACTION_CFGS = {23: ("0", ""), 25: ("3", ""), 37: ("3", EXTRA)}
 
 
@@ -52,16 +54,20 @@ def latest_ckpt(d):
 
 
 def ckpt_action_flags(path):
-    """(fine_walk_frames, extra_charges) CLI values for a checkpoint."""
+    """(fine_walk_frames, extra_charges, wait_frames, wind_obs) CLI values
+    for a checkpoint."""
     import torch
     ck = torch.load(path, map_location="cpu")
     cfg = ck.get("action_cfg")
     if cfg is not None:
         return (str(int(cfg.get("fine_walk_frames", 0))),
-                ",".join(str(c) for c in cfg.get("extra_charges", [])))
+                ",".join(str(c) for c in cfg.get("extra_charges", [])),
+                ",".join(str(c) for c in cfg.get("wait_frames", [])),
+                bool(cfg.get("wind_obs", False)))
     n = ck["model"]["policy_head.weight"].shape[0]
     if n in KNOWN_ACTION_CFGS:
-        return KNOWN_ACTION_CFGS[n]
+        fine, extra = KNOWN_ACTION_CFGS[n]
+        return (fine, extra, "", False)
     raise SystemExit(f"cannot infer action set of {path} ({n} actions)")
 
 
@@ -90,6 +96,95 @@ def run(cmd, log_path, live=False):
     return res.returncode, out
 
 
+def run_handoff(from_lvl, ckpt, episodes, log_path, out=None):
+    """Run Handoff for `from_lvl`'s model; returns (success_rate, new_states)."""
+    pf, pe, pw, pwind = ckpt_action_flags(ckpt)
+    cmd = [PY, "Handoff.py", "--level", str(from_lvl),
+           "--checkpoint", ckpt,
+           "--start-states", f"starts_L{from_lvl}.json",
+           "--episodes", str(episodes),
+           "--fine-walk-frames", pf]
+    if pe:
+        cmd += ["--extra-charges", pe]
+    if pw:
+        cmd += ["--wait-frames", pw]
+    if pwind:
+        cmd += ["--wind-obs"]
+    if out:
+        cmd += ["--out", out]
+    rc, txt = run(cmd, log_path)
+    mm = re.search(r"(\d+)/(\d+) episodes reached", txt)
+    aa = re.search(r"merged (\d+) new handoff states", txt)
+    if rc != 0 or not mm:
+        raise SystemExit(f"handoff from level {from_lvl} failed; see {log_path}")
+    return (int(mm.group(1)) / max(1, int(mm.group(2))),
+            int(aa.group(1)) if aa else 0)
+
+
+def reconcile(lo, hi, args):
+    """Seal the relay across an already-trained band: for each level N in
+    [lo, hi], bank level N-1's real arrivals into starts_LN.json, evaluate
+    model N from its (now enriched) pool, and briefly resume its training
+    when new arrivals appeared or its success rate is below the gate."""
+    for lvl in range(lo, hi + 1):
+        print(f"\n{'='*66}\n=== RECONCILE LEVEL {lvl}\n{'='*66}", flush=True)
+        prev_ck = latest_ckpt(f"checkpoints/L{lvl - 1}")
+        my_ck = latest_ckpt(f"checkpoints/L{lvl}")
+        if not my_ck:
+            print(f"level {lvl}: no model -- skip (train it first)")
+            continue
+        added = 0
+        if prev_ck:
+            rate_prev, added = run_handoff(lvl - 1, prev_ck,
+                                           args.handoff_episodes,
+                                           f"logs/L{lvl}_reconcile_in.log")
+            print(f"level {lvl-1} delivers with success {rate_prev:.2f}; "
+                  f"{added} new arrival states banked into starts_L{lvl}.json")
+        else:
+            print(f"level {lvl}: no predecessor model, skipping arrival bank")
+        # evaluate THIS level's model from its pool (also feeds N+1's pool)
+        rate, _ = run_handoff(lvl, my_ck, args.handoff_episodes,
+                              f"logs/L{lvl}_reconcile_eval.log")
+        print(f"level {lvl} model success from pool: {rate:.2f}")
+        if added == 0 and rate >= args.gate:
+            print(f"level {lvl}: sealed, nothing to do")
+            continue
+        print(f"level {lvl}: resuming training "
+              f"({'new arrivals' if added else ''}"
+              f"{' + ' if added and rate < args.gate else ''}"
+              f"{'low success' if rate < args.gate else ''})")
+        mf, me, mw, mwind = ckpt_action_flags(my_ck)
+        cmd = [PY, "Train.py",
+               "--num-envs", str(args.num_envs), "--rollout", "256",
+               "--total-steps", str(args.reconcile_budget),
+               "--goal-level", str(lvl + 1),
+               "--start-states", f"starts_L{lvl}.json", "--curriculum",
+               "--max-steps", "80",
+               "--p-bottom", "0.0", "--cur-target-p-bottom", "0.0",
+               "--cur-advance-rate", "0.45", "--cur-window", "20",
+               "--ent-coef", "0.06",
+               "--fine-walk-frames", mf,
+               "--stop-at-succ", str(args.stop_succ),
+               "--save-dir", f"checkpoints/L{lvl}",
+               "--resume", my_ck]
+        if me:
+            cmd += ["--extra-charges", me]
+        if mw:
+            cmd += ["--wait-frames", mw]
+        if mwind:
+            cmd += ["--wind-obs"]
+        rc, _txt = run(cmd, f"logs/L{lvl}_reconcile_train.log", live=True)
+        if rc != 0:
+            raise SystemExit(f"reconcile training failed on level {lvl}")
+        rate, _ = run_handoff(lvl, latest_ckpt(f"checkpoints/L{lvl}"),
+                              args.handoff_episodes,
+                              f"logs/L{lvl}_reconcile_eval2.log")
+        print(f"level {lvl} after resume: success {rate:.2f}"
+              + ("" if rate >= args.gate else "  (STILL below gate -- "
+                 "needs a human look)"))
+    print("\nreconcile pass finished.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--levels", required=True, help="e.g. 10-14 or 12")
@@ -106,12 +201,24 @@ def main():
     ap.add_argument("--handoff-episodes", type=int, default=40)
     ap.add_argument("--retrain", action="store_true",
                     help="train even when a checkpoint already exists")
+    ap.add_argument("--reconcile", action="store_true",
+                    help="RECONCILE mode for already-trained bands: for each "
+                        "level, bank the predecessor's real arrival states, "
+                        "evaluate the level's model from its pool, and give "
+                        "it a short warm-started resume if new arrivals were "
+                        "added or the success rate is below the gate")
+    ap.add_argument("--reconcile-budget", type=int, default=800_000,
+                    help="max extra training steps per level in reconcile mode")
     args = ap.parse_args()
     m = re.match(r"(\d+)(?:-(\d+))?$", args.levels)
     if not m:
         raise SystemExit("--levels must look like 12 or 10-14")
     lo, hi = int(m.group(1)), int(m.group(2) or m.group(1))
     os.makedirs("logs", exist_ok=True)
+
+    if args.reconcile:
+        reconcile(lo, hi, args)
+        return
 
     for lvl in range(lo, hi + 1):
         print(f"\n{'='*66}\n=== LEVEL {lvl}\n{'='*66}", flush=True)
@@ -130,20 +237,9 @@ def main():
             if not prev_ck:
                 raise SystemExit(f"no model for level {lvl-1} in {prev_dir}; "
                                  f"use --no-handoff or train it first")
-            pf, pe = ckpt_action_flags(prev_ck)
-            cmd = [PY, "Handoff.py", "--level", str(lvl - 1),
-                   "--checkpoint", prev_ck,
-                   "--start-states", f"starts_L{lvl - 1}.json",
-                   "--episodes", str(args.handoff_episodes),
-                   "--fine-walk-frames", pf]
-            if pe:
-                cmd += ["--extra-charges", pe]
-            rc, out = run(cmd, f"logs/L{lvl}_handoff.log")
-            mm = re.search(r"(\d+)/(\d+) episodes reached", out)
-            if rc != 0 or not mm:
-                raise SystemExit(f"handoff failed for level {lvl}; "
-                                 f"see logs/L{lvl}_handoff.log")
-            rate = int(mm.group(1)) / max(1, int(mm.group(2)))
+            rate, _added = run_handoff(lvl - 1, prev_ck,
+                                       args.handoff_episodes,
+                                       f"logs/L{lvl}_handoff.log")
             print(f"gate: level {lvl-1} model success {rate:.2f}")
             if rate < args.gate:
                 raise SystemExit(
@@ -159,12 +255,15 @@ def main():
             raise SystemExit(f"AutoSeed failed; see logs/L{lvl}_seed.log")
 
         # ---- 3. route proof + emitted curriculum ---------------------------
-        rc, out = run([PY, "LevelGraph.py", "--level", str(lvl),
-                       "--starts", starts,
-                       "--fine-walk-frames", FWF, "--extra-charges", EXTRA,
-                       "--max-depth", "14", "--max-nodes", "2500",
-                       "--max-paths", "1", "--emit-starts", starts],
-                      f"logs/L{lvl}_graph.log")
+        windy = lvl in WIND_LEVELS
+        graph_cmd = [PY, "LevelGraph.py", "--level", str(lvl),
+                     "--starts", starts,
+                     "--fine-walk-frames", FWF, "--extra-charges", EXTRA,
+                     "--max-depth", "14", "--max-nodes", "2500",
+                     "--max-paths", "6", "--emit-starts", starts]
+        if windy:
+            graph_cmd += ["--wait-frames", WAIT]
+        rc, out = run(graph_cmd, f"logs/L{lvl}_graph.log")
         if rc != 0 or "NO PATH FOUND" in out:
             raise SystemExit(
                 f"STOP: no proven route on level {lvl} with the standard "
@@ -172,19 +271,23 @@ def main():
                 f"(logs/L{lvl}_graph.log; try Probe --render).")
 
         # ---- 4. train -------------------------------------------------------
-        rc, out = run([PY, "Train.py",
-                       "--num-envs", str(args.num_envs), "--rollout", "256",
-                       "--total-steps", str(args.budget),
-                       "--goal-level", str(lvl + 1),
-                       "--start-states", starts, "--curriculum",
-                       "--max-steps", "80",
-                       "--p-bottom", "0.0", "--cur-target-p-bottom", "0.0",
-                       "--cur-advance-rate", "0.45", "--cur-window", "20",
-                       "--ent-coef", "0.06",
-                       "--fine-walk-frames", FWF, "--extra-charges", EXTRA,
-                       "--stop-at-succ", str(args.stop_succ),
-                       "--save-dir", save_dir],
-                      f"logs/L{lvl}_train.log", live=True)
+        train_cmd = [PY, "Train.py",
+                     "--num-envs", str(args.num_envs), "--rollout", "256",
+                     "--total-steps", str(args.budget),
+                     "--goal-level", str(lvl + 1),
+                     "--start-states", starts, "--curriculum",
+                     "--max-steps", "80",
+                     "--p-bottom", "0.0", "--cur-target-p-bottom", "0.0",
+                     "--cur-advance-rate", "0.45", "--cur-window", "20",
+                     "--ent-coef", "0.06",
+                     "--fine-walk-frames", FWF, "--extra-charges", EXTRA,
+                     "--stop-at-succ", str(args.stop_succ),
+                     "--save-dir", save_dir]
+        if windy:
+            # wind levels: agent sees the wind phase, can wait it out, and
+            # trains against randomized phases
+            train_cmd += ["--wind-obs", "--wait-frames", WAIT]
+        rc, out = run(train_cmd, f"logs/L{lvl}_train.log", live=True)
         if rc != 0 or not latest_ckpt(save_dir):
             raise SystemExit(f"training failed on level {lvl}; "
                              f"see logs/L{lvl}_train.log")

@@ -1,0 +1,48 @@
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+loaded checkpoints/L9\ppo_409600.pt | level 9 -> 10 | 40 episodes (stochastic)
+  ep   0: arrived lvl 10 x=374 y=320
+  ep   1: arrived lvl 10 x=255 y=296
+  ep   2: arrived lvl 10 x=373 y=320
+  ep   3: arrived lvl 10 x=263 y=296
+  ep   4: arrived lvl 10 x=373 y=320
+  ep   5: arrived lvl 10 x=255 y=296
+  ep   6: arrived lvl 10 x=255 y=296
+  ep   7: arrived lvl 10 x=255 y=296
+  ep   8: arrived lvl 10 x=373 y=320
+  ep   9: arrived lvl 10 x=263 y=296
+  ep  10: arrived lvl 10 x=267 y=296
+  ep  11: arrived lvl 10 x=255 y=296
+  ep  12: arrived lvl 10 x=255 y=296
+  ep  13: arrived lvl 10 x=376 y=320
+  ep  14: arrived lvl 10 x=267 y=296
+  ep  15: arrived lvl 10 x=263 y=296
+  ep  16: arrived lvl 10 x=255 y=296
+  ep  17: arrived lvl 10 x=267 y=296
+  ep  18: arrived lvl 10 x=267 y=296
+  ep  19: arrived lvl 10 x=378 y=320
+  ep  20: arrived lvl 10 x=373 y=320
+  ep  21: arrived lvl 10 x=373 y=320
+  ep  22: arrived lvl 10 x=374 y=320
+  ep  23: arrived lvl 10 x=255 y=296
+  ep  24: arrived lvl 10 x=374 y=320
+  ep  25: arrived lvl 10 x=263 y=296
+  ep  26: arrived lvl 10 x=263 y=296
+  ep  27: arrived lvl 10 x=255 y=296
+  ep  28: arrived lvl 10 x=378 y=320
+  ep  29: arrived lvl 10 x=263 y=296
+  ep  30: arrived lvl 10 x=373 y=320
+  ep  31: arrived lvl 10 x=255 y=296
+  ep  32: arrived lvl 10 x=267 y=296
+  ep  33: arrived lvl 10 x=263 y=296
+  ep  34: arrived lvl 10 x=373 y=320
+  ep  35: arrived lvl 10 x=263 y=296
+  ep  36: arrived lvl 10 x=374 y=320
+  ep  37: arrived lvl 10 x=373 y=320
+  ep  38: arrived lvl 10 x=373 y=320
+  ep  39: arrived lvl 10 x=263 y=296
+
+40/40 episodes reached level 10, 40 arrival states collected
+merged 1 new handoff states into starts_L10.json (rest were duplicates of existing entries)
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists

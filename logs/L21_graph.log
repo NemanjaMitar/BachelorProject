@@ -1,0 +1,11 @@
+pygame 2.6.1 (SDL 2.28.4, Python 3.13.14)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+level 21 -> 22 | 37 actions charges=(4, 8, 12, 16, 20, 26, 32) fine_walk=3 grid=4px
+8 seed nodes
+PATH (1 actions) -> lvl 22 (150,296):
+    actions: ["('jump', 'left', 32)"]
+
+done: 81 macro-steps in 3s | 30 reachable spots | 1 goal paths | 0 trap edges
+emitted 0 path states into starts_L21.json (1 pool states re-scored to 1.0 by depth-1 check)
+C:\Users\Nemanja\AppData\Local\Programs\Python\Python313\Lib\site-packages\pygame\pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists

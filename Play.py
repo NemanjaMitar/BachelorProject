@@ -40,7 +40,7 @@ import numpy as np
 import torch
 import pygame
 
-from JK_Env import JumpKingEnv
+from JK_Env import JumpKingEnv, build_action_table
 from PPO import ActorCritic, get_device
 
 
@@ -100,24 +100,47 @@ class ModelBank:
 
     def load(self, path):
         ckpt = torch.load(path, map_location=self.device)
-        # Build the net with the checkpoint's OWN action count. Fine-walk
-        # actions are appended to the table, so a 23-action model's indices
-        # stay valid inside a 25-action env -- mixed relays just work, as long
-        # as the env is built with the LARGEST action set in use.
+        # Build the net with the checkpoint's OWN action count, and pair it
+        # with the action TABLE its indices were trained against (from the
+        # stored action_cfg, or inferred for pre-stamp checkpoints). The
+        # relay swaps env.actions to this table whenever the model is active,
+        # so models trained with DIFFERENT action sets coexist safely --
+        # index meaning travels with the model, not with the env.
         n_act = ckpt["model"]["policy_head.weight"].shape[0]
-        if n_act > self.env.num_actions:
+        cfg = ckpt.get("action_cfg")
+        if cfg is not None:
+            fine = int(cfg.get("fine_walk_frames", 0))
+            extra = tuple(cfg.get("extra_charges", ()))
+            wait = tuple(cfg.get("wait_frames", ()))
+            wind = bool(cfg.get("wind_obs", False))
+        elif n_act in KNOWN_ACTION_CFGS:
+            fine, extra = KNOWN_ACTION_CFGS[n_act]
+            wait, wind = (), False
+        else:
             raise SystemExit(
-                f"{path} was trained with {n_act} actions but the env only has "
-                f"{self.env.num_actions}. Pass --fine-walk-frames / "
-                f"--extra-charges matching that model's training.")
-        net = ActorCritic(self.env.obs_dim, n_act,
+                f"{path}: {n_act} actions and no stored action_cfg -- cannot "
+                f"reconstruct its action table.")
+        table = build_action_table(fine_walk_frames=fine, extra_charges=extra,
+                                   wait_frames=wait)
+        if len(table) != n_act:
+            raise SystemExit(
+                f"{path}: action_cfg gives {len(table)} actions but the "
+                f"policy head has {n_act} -- checkpoint metadata is corrupt.")
+        # The model sees the FIRST obs_dim entries of the env's observation:
+        # scalars are appended after the grid, and the wind pair goes last,
+        # so a 4-scalar model's slice of a 6-scalar obs is exactly what it
+        # was trained on.
+        n_scal = 6 if wind else 4
+        obs_dim = self.env._grid_flat + n_scal
+        net = ActorCritic(obs_dim, n_act,
                           grid_shape=self.env.grid_shape,
-                          n_scalars=self.env.n_scalars).to(self.device)
+                          n_scalars=n_scal).to(self.device)
         net.load_state_dict(ckpt["model"])
         net.eval()
         print(f"loaded {path} (trained to step {ckpt.get('step', '?')}, "
-              f"{n_act} actions)")
-        return net
+              f"{n_act} actions, extras={extra or 'none'}"
+              f"{', wind-aware' if wind else ''})")
+        return net, table, obs_dim
 
     def for_level(self, lvl):
         if lvl in self._cache:
@@ -186,10 +209,13 @@ def main():
     print(f"env action set: fine_walk_frames={fine} extra_charges={extra}")
 
     device = get_device()
+    # wind_obs=True: the env ALWAYS produces the full 6-scalar observation;
+    # each model slices off what it was trained on (see ModelBank.load).
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=args.goal_level,
                       start_states=args.start_states,
                       fine_walk_frames=fine,
-                      extra_charges=extra)
+                      extra_charges=extra,
+                      wind_obs=True)
 
     bank = ModelBank(env, device, args.model_dir)
     fallback = bank.load(args.checkpoint) if args.checkpoint else None
@@ -205,6 +231,7 @@ def main():
     window = pygame.display.set_mode((w, h))
     pygame.display.set_caption("Jump King — trained PPO agent")
     clock = pygame.time.Clock()
+    hud_font = pygame.font.Font(None, 22)
 
     def draw():
         # The env renders the world onto env.game_screen if we ask the level to.
@@ -226,6 +253,14 @@ def main():
             print("draw warning:", e)
         scaled = pygame.transform.scale(env.game_screen, (w, h))
         window.blit(scaled, (0, 0))
+        try:
+            hud = hud_font.render(
+                f"lvl {env.levels.current_level}  "
+                f"x={int(env.king.rect_x)}  y={int(env.king.rect_y)}",
+                True, (255, 255, 0))
+            window.blit(hud, (6, 6))
+        except Exception:
+            pass
         pygame.display.flip()
 
     warned_levels = set()
@@ -237,6 +272,8 @@ def main():
         best_alt = -1e9
         steps = 0
         net = None
+        net_table = None
+        net_obs_dim = None
         net_lvl = None
 
         while not done:
@@ -250,14 +287,14 @@ def main():
             if lvl != net_lvl:
                 cand = bank.for_level(lvl)
                 if cand is not None:
-                    if net is not None and cand is not net:
+                    if net is not None and cand[0] is not net:
                         print(f"\n>>> level {lvl}: switching to model L{lvl}")
-                    net = cand
+                    net, net_table, net_obs_dim = cand
                 elif fallback is not None:
-                    if net is not None and net is not fallback:
+                    if net is not None and net is not fallback[0]:
                         print(f"\n>>> level {lvl}: no L{lvl} model, using the "
                               f"--checkpoint fallback")
-                    net = fallback
+                    net, net_table, net_obs_dim = fallback
                 elif net is not None:
                     if lvl not in warned_levels:
                         print(f"\n>>> level {lvl}: no model found, keeping the "
@@ -269,9 +306,15 @@ def main():
                           f"{args.model_dir}/L{lvl}/")
                     env.close()
                     sys.exit(1)
+                # The env executes whatever table it holds: install the ACTIVE
+                # model's table so its action indices mean what they meant in
+                # training, regardless of what other models in the relay use.
+                env.actions = net_table
+                env.num_actions = len(net_table)
                 net_lvl = lvl
 
-            ob = torch.as_tensor(obs, device=device).float().unsqueeze(0)
+            ob = torch.as_tensor(obs[:net_obs_dim],
+                                 device=device).float().unsqueeze(0)
             with torch.no_grad():
                 logits, _ = net(ob)
                 if args.stochastic:

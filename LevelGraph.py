@@ -70,6 +70,11 @@ def main():
     ap.add_argument("--extra-charges", default=None,
                     help="comma list of jump charges APPENDED to the table "
                          "(matches Train.py --extra-charges)")
+    ap.add_argument("--wait-frames", default=None,
+                    help="comma list of wait actions (wind levels). NOTE: on "
+                         "windy levels the search teleports reset the wind "
+                         "phase, so found paths are proofs for phase 0 only "
+                         "-- treat them as route hints, not guarantees.")
     ap.add_argument("--grid", type=int, default=4,
                     help="dedup raster in px (smaller = finer but slower)")
     ap.add_argument("--max-depth", type=int, default=12)
@@ -87,6 +92,8 @@ def main():
         kw["charges"] = tuple(int(c) for c in args.charges.split(","))
     if args.extra_charges:
         kw["extra_charges"] = tuple(int(c) for c in args.extra_charges.split(","))
+    if args.wait_frames:
+        kw["wait_frames"] = tuple(int(c) for c in args.wait_frames.split(","))
     env = JumpKingEnv(**kw)
     lvl, goal = args.level, args.level + 1
     print(f"level {lvl} -> {goal} | {env.num_actions} actions "
@@ -112,12 +119,22 @@ def main():
             nodes[k] = (sx, sy, (), (sx, sy))
             q.append(k)
     print(f"{len(nodes)} seed nodes")
+    # The ENTRY seed (lowest on the level) approximates where the level is
+    # entered from below; a path from it grades the FULL trajectory, so the
+    # search keeps going until it has one (or the budget runs out).
+    entry_key = None
+    if nodes:
+        entry_key = max(nodes, key=lambda k: nodes[k][1])
+        ex, ey = nodes[entry_key][0], nodes[entry_key][1]
+        print(f"entry seed: ({ex},{ey})")
 
     paths, traps = [], []
+    entry_path_found = False
     steps = 0
     t0 = time.time()
 
-    while q and len(nodes) < args.max_nodes and len(paths) < args.max_paths:
+    while (q and len(nodes) < args.max_nodes
+           and len(paths) < args.max_paths and not entry_path_found):
         k = q.popleft()
         x, y, path, origin = nodes[k]
         if len(path) >= args.max_depth:
@@ -136,6 +153,8 @@ def main():
                 print(f"PATH ({len(p)} actions) from seed {origin} "
                       f"-> lvl {flvl} ({fx},{fy}):")
                 print(f"    actions: {[str(env.actions[i]) for i in p]}")
+                if entry_key is not None and key(*origin) == entry_key:
+                    entry_path_found = True
                 break
             if flvl < lvl:
                 continue                      # fell off: dead branch
@@ -166,19 +185,21 @@ def main():
         print("NO PATH FOUND with this action set.")
         print("Try: --fine-walk-frames 3, extra --charges, larger --max-depth.")
     elif args.emit_starts:
-        # Replay the shortest path FROM ITS ORIGIN SEED and bank each
+        # Replay EVERY found path from its origin seed and bank each
         # intermediate settled state as a curriculum start, scored by
-        # progress along the path.
-        best = min(paths, key=lambda t: len(t[0]))
-        p, seed = best[0], best[1]
-        states, cx, cy = [], seed[0], seed[1]
-        for i, a in enumerate(p):
-            env.reset(level=lvl, rect_x=cx, rect_y=cy)
-            _, _, _t, _tr, info = env.step(a)
-            cx, cy = int(info["x"]), int(info["y"])
-            if info["level"] == lvl:          # intermediate spot on the level
-                states.append({"level": lvl, "x": cx, "y": cy,
-                               "score": round((i + 1) / len(p), 3)})
+        # progress along its path. The entry-seed path (searched for above)
+        # grades the full bottom-to-exit trajectory; shorter paths from
+        # higher seeds add rungs near the top.
+        states = []
+        for p, seed, _dst in paths:
+            cx, cy = seed[0], seed[1]
+            for i, a in enumerate(p):
+                env.reset(level=lvl, rect_x=cx, rect_y=cy)
+                _, _, _t, _tr, info = env.step(a)
+                cx, cy = int(info["x"]), int(info["y"])
+                if info["level"] == lvl:      # intermediate spot on the level
+                    states.append({"level": lvl, "x": cx, "y": cy,
+                                   "score": round((i + 1) / len(p), 3)})
         try:
             with open(args.emit_starts) as f:
                 pool = json.load(f)

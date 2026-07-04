@@ -56,6 +56,33 @@ import numpy as np
 from Occupancy import build_occupancy_grid, GRID_CELL
 
 
+def build_action_table(charges=(4, 8, 12, 16, 20, 26, 32), walk_frames=10,
+                       fine_walk_frames=0, extra_charges=(), wait_frames=()):
+    """THE canonical action-table layout. Any tool that needs to know what a
+    model's action index means (e.g. Play's per-model tables) must build the
+    table through this function with that model's OWN action config --
+    index meaning depends on the exact extra_charges list, so two models
+    trained with different lists are NOT index-compatible."""
+    actions = []
+    for d in ("left", "up", "right"):
+        for c in charges:
+            actions.append(("jump", d, c))
+    actions.append(("walk", "left", int(walk_frames)))
+    actions.append(("walk", "right", int(walk_frames)))
+    if fine_walk_frames:
+        actions.append(("walk", "left", int(fine_walk_frames)))
+        actions.append(("walk", "right", int(fine_walk_frames)))
+    # Extra charges go last so the base indices keep their meaning.
+    for d in ("left", "up", "right"):
+        for c in (extra_charges or ()):
+            actions.append(("jump", d, c))
+    # Wait actions (wind levels): stand still N frames to let the wind phase
+    # advance -- the timing tool human players use on levels 25-31.
+    for f in (wait_frames or ()):
+        actions.append(("wait", "none", int(f)))
+    return actions
+
+
 class JumpKingEnv:
     """A single headless Jump King environment. Gymnasium-style API.
 
@@ -77,6 +104,14 @@ class JumpKingEnv:
                                        # so existing models' indices stay valid.
                                        # CHANGES num_actions: growth-compatible
                                        # with old checkpoints, see Play.ModelBank.
+                 wait_frames=(),       # wind levels: "stand still N frames"
+                                       # actions appended after the extras,
+                                       # e.g. (30, 60) -- lets the agent TIME
+                                       # its jumps to the wind phase.
+                 wind_obs=False,       # append sin/cos of the wind phase to the
+                                       # observation scalars (4 -> 6) AND
+                                       # randomize the phase at every teleport
+                                       # so training covers all phases.
                  max_steps=600,
                  max_settle_frames=2000,
                  goal_level=None,
@@ -102,6 +137,8 @@ class JumpKingEnv:
         self.walk_frames = int(walk_frames)
         self.fine_walk_frames = int(fine_walk_frames or 0)
         self.extra_charges = tuple(extra_charges or ())
+        self.wait_frames = tuple(wait_frames or ())
+        self.wind_obs = bool(wind_obs)
         self.max_steps = int(max_steps)
         self.max_settle_frames = int(max_settle_frames)
         self.goal_level = goal_level          # if set: terminate+reward on reaching it
@@ -157,6 +194,12 @@ class JumpKingEnv:
         # Per-checkpoint failure-rate EMA for prioritized sampling. Starts at
         # 1.0 (assume failing) so new/unlocked states immediately get focus.
         self._cp_fail = [1.0] * len(self._cp_ranked)
+        # Consecutive failed attempts per checkpoint. A state that never
+        # succeeds within the quarantine threshold is likely UNSOLVABLE
+        # (disconnected from the exit); its sampling weight collapses so it
+        # cannot eat an unattended run. Success clears the counter.
+        self._cp_attempts = [0] * len(self._cp_ranked)
+        self.quarantine_after = 150
         self._episode_cp_idx = None            # which checkpoint THIS episode used
 
         self._build_action_table()
@@ -203,7 +246,7 @@ class JumpKingEnv:
         self.grid_h = self.screen_h // self.grid_cell
         self.grid_w = self.screen_w // self.grid_cell
         self.grid_shape = (3, self.grid_h, self.grid_w)
-        self.n_scalars = 4
+        self.n_scalars = 6 if self.wind_obs else 4
         self._grid_flat = 3 * self.grid_h * self.grid_w
         self.obs_dim = self._grid_flat + self.n_scalars
         self.num_actions = len(self.actions)
@@ -217,22 +260,10 @@ class JumpKingEnv:
     # ------------------------------------------------------------------ setup
     def _build_action_table(self):
         """actions[i] = (kind, direction, magnitude)."""
-        self.actions = []
-        for d in ("left", "up", "right"):
-            for c in self.charges:
-                self.actions.append(("jump", d, c))
-        self.actions.append(("walk", "left", self.walk_frames))
-        self.actions.append(("walk", "right", self.walk_frames))
-        if self.fine_walk_frames > 0:
-            # Micro-steps (~1.4 px/frame): lets the agent position itself into
-            # launch windows narrower than the normal walk stride (~14 px).
-            self.actions.append(("walk", "left", self.fine_walk_frames))
-            self.actions.append(("walk", "right", self.fine_walk_frames))
-        # Extra charges go LAST so every earlier index keeps its meaning and
-        # old checkpoints stay compatible with a grown action table.
-        for d in ("left", "up", "right"):
-            for c in self.extra_charges:
-                self.actions.append(("jump", d, c))
+        self.actions = build_action_table(self.charges, self.walk_frames,
+                                          self.fine_walk_frames,
+                                          self.extra_charges,
+                                          self.wait_frames)
 
     # ------------------------------------------------------------- curriculum
     def _load_start_states(self, path):
@@ -292,6 +323,9 @@ class JumpKingEnv:
                 return None
             k = max(1, self._unlocked)
             w = np.asarray(self._cp_fail[:k], dtype=np.float64) + 0.1
+            for i in range(k):                   # quarantined: near-zero weight
+                if self._cp_attempts[i] >= self.quarantine_after:
+                    w[i] = 0.02
             idx = int(self.rng.choice(k, p=w / w.sum()))
             self._episode_cp_idx = idx
             return self._cp_ranked[idx]
@@ -347,6 +381,27 @@ class JumpKingEnv:
         if self._episode_cp_idx is not None:
             i = self._episode_cp_idx
             self._cp_fail[i] = 0.9 * self._cp_fail[i] + (0.0 if success else 0.1)
+            if success:
+                self._cp_attempts[i] = 0
+            else:
+                self._cp_attempts[i] += 1
+                if self._cp_attempts[i] == self.quarantine_after:
+                    # Quarantine is a LAST resort: bench the state only when
+                    # every EASIER-ranKED state (its ladder of prerequisites,
+                    # by curriculum order) is mastered. While any rung above
+                    # it still fails, this state SHOULD be failing -- parole
+                    # it and keep the pressure on the rungs instead.
+                    ladder = self._cp_fail[:i]
+                    if ladder and float(max(ladder)) > 0.4:
+                        self._cp_attempts[i] = self.quarantine_after // 2
+                    else:
+                        s = self._cp_ranked[i]
+                        print(f"JK_Env: QUARANTINED start state "
+                              f"({self._state_field(s,'x','rect_x')},"
+                              f"{self._state_field(s,'y','rect_y')}) after "
+                              f"{self.quarantine_after} straight failures "
+                              f"with peers mastered -- likely unsolvable, "
+                              f"sampling weight dropped")
         self._succ.append(1.0 if success else 0.0)
         if len(self._succ) < self.cur_window:
             return
@@ -449,6 +504,13 @@ class JumpKingEnv:
             # airborne from an auto-fire.)
             self._set_keys(left=hold_left, right=hold_right)
             frame()
+        elif kind == "wait":
+            # Stand still and let the world (the wind phase) move on.
+            self._set_keys()
+            for _ in range(magnitude):
+                frame()
+                if self.levels.ending:
+                    break
         else:  # walk
             for _ in range(magnitude):
                 self._set_keys(left=(direction == "left"),
@@ -485,12 +547,18 @@ class JumpKingEnv:
         grid = build_occupancy_grid(platforms,
                                     self.king.rect_x, self.king.rect_y,
                                     self.screen_w, self.screen_h, self.grid_cell)
-        scalars = np.array([
+        vals = [
             self.king.rect_x / self.screen_w,
             self.king.rect_y / self.screen_h,
             self.levels.current_level / self.max_level,
             self._altitude() / ((self.max_level + 1) * self.screen_h),
-        ], dtype=np.float32)
+        ]
+        if self.wind_obs:
+            # Complete wind state: force right now (sin) and where the cycle
+            # is heading (cos). Together they make windy levels Markov again.
+            wv = float(self.levels.wind.wind_var)
+            vals += [math.sin(wv), math.cos(wv)]
+        scalars = np.array(vals, dtype=np.float32)
         return np.concatenate([grid.ravel(), scalars]).astype(np.float32)
 
     # ---------------------------------------------------------------- teleport
@@ -520,6 +588,13 @@ class JumpKingEnv:
             self.king.rect_x = float(x)
         if y is not None:
             self.king.rect_y = float(y)
+
+        # Wind phase randomization: levels.reset() zeroes wind_var, so without
+        # this every episode would train against the exact same wind timeline
+        # -- and the policy would silently overfit phase 0. In the relay the
+        # king arrives at ARBITRARY phases, so training must cover them all.
+        if self.wind_obs:
+            self.levels.wind.wind_var = float(self.rng.uniform(0.0, 2.0 * math.pi))
 
         self._set_keys()
         # Airborne with zero momentum: gravity grounds him onto whatever is
