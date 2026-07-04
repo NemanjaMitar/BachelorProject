@@ -107,7 +107,6 @@ def main():
     ap.add_argument("--retrain", action="store_true",
                     help="train even when a checkpoint already exists")
     args = ap.parse_args()
-
     m = re.match(r"(\d+)(?:-(\d+))?$", args.levels)
     if not m:
         raise SystemExit("--levels must look like 12 or 10-14")
