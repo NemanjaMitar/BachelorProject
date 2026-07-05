@@ -83,6 +83,8 @@ def main():
     ap.add_argument("--wait-frames", type=str, default="",
                     help="comma list of wait actions the model was trained "
                          "with (wind levels)")
+    ap.add_argument("--wind-jump", type=str, default="",
+                    help="comma buckets for wind-jump combos (match training)")
     ap.add_argument("--wind-obs", action="store_true",
                     help="the model was trained with wind observation")
     args = ap.parse_args()
@@ -93,11 +95,13 @@ def main():
 
     extra = tuple(int(c) for c in args.extra_charges.split(",")) if args.extra_charges else ()
     wait = tuple(int(c) for c in args.wait_frames.split(",")) if args.wait_frames else ()
+    wjump = tuple(int(c) for c in args.wind_jump.split(",")) if args.wind_jump else ()
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=goal,
                       start_states=args.start_states, p_bottom=0.0,
                       fine_walk_frames=args.fine_walk_frames,
                       extra_charges=extra,
                       wait_frames=wait,
+                      wind_jump=wjump,
                       wind_obs=args.wind_obs)
     ckpt = torch.load(args.checkpoint, map_location=device)
     n_act = ckpt["model"]["policy_head.weight"].shape[0]

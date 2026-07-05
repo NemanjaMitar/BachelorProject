@@ -143,6 +143,9 @@ def env_factory(args):
             extra_charges=_parse_charges(args.extra_charges),
             wait_frames=_parse_charges(args.wait_frames),
             wind_obs=args.wind_obs,
+            wind_jump=_parse_charges(args.wind_jump),
+            goal_x_min=args.goal_x_min,
+            goal_x_max=args.goal_x_max,
         )
     return _make
 
@@ -162,7 +165,10 @@ def smoke(args):
                       fine_walk_frames=args.fine_walk_frames,
                       extra_charges=_parse_charges(args.extra_charges),
                       wait_frames=_parse_charges(args.wait_frames),
-                      wind_obs=args.wind_obs)
+                      wind_obs=args.wind_obs,
+                      wind_jump=_parse_charges(args.wind_jump),
+                      goal_x_min=args.goal_x_min,
+                      goal_x_max=args.goal_x_max)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 grid_shape=env.grid_shape, n_scalars=env.n_scalars)
     maybe_resume(agent, args, device)
@@ -285,6 +291,7 @@ def train(args):
                             "fine_walk_frames": args.fine_walk_frames,
                             "extra_charges": list(_parse_charges(args.extra_charges)),
                             "wait_frames": list(_parse_charges(args.wait_frames)),
+                            "wind_jump": list(_parse_charges(args.wind_jump)),
                             "wind_obs": args.wind_obs}}
 
         # Early stop for the automated pipeline: curriculum fully unlocked and
@@ -339,7 +346,10 @@ def train_visible(args):
                       fine_walk_frames=args.fine_walk_frames,
                       extra_charges=_parse_charges(args.extra_charges),
                       wait_frames=_parse_charges(args.wait_frames),
-                      wind_obs=args.wind_obs)
+                      wind_obs=args.wind_obs,
+                      wind_jump=_parse_charges(args.wind_jump),
+                      goal_x_min=args.goal_x_min,
+                      goal_x_max=args.goal_x_max)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 lr=args.lr, gamma=args.gamma, lam=args.lam, clip=args.clip,
                 epochs=args.epochs, minibatches=args.minibatches, ent_coef=args.ent_coef,
@@ -409,6 +419,7 @@ def train_visible(args):
                             "fine_walk_frames": args.fine_walk_frames,
                             "extra_charges": list(_parse_charges(args.extra_charges)),
                             "wait_frames": list(_parse_charges(args.wait_frames)),
+                            "wind_jump": list(_parse_charges(args.wind_jump)),
                             "wind_obs": args.wind_obs}},
                        path)
             print("saved", path)
@@ -425,7 +436,12 @@ def build_argparser():
     p.add_argument("--goal-level", type=int, default=1,
                    help="terminate+reward on reaching this level (curriculum)")
     p.add_argument("--level-reward", type=float, default=10.0)
-    p.add_argument("--level-penalty", type=float, default=0.0)
+    p.add_argument("--level-penalty", type=float, default=10.0,
+                   help="penalty per level fallen. MUST equal --level-reward "
+                        "whenever episodes can span multiple levels (merged "
+                        "models), or climb-fall-climb reward farming collapses "
+                        "the run; harmless for per-level models (falls "
+                        "terminate anyway)")
     p.add_argument("--altitude-breadcrumb", type=float, default=0.0)
     p.add_argument("--start-states", type=str, default=None,
                    help="path to start_states.json; enables the checkpoint curriculum")
@@ -474,9 +490,18 @@ def build_argparser():
                         "into launch windows narrower than the 14 px normal walk. "
                         "CHANGES the action count: incompatible with old checkpoints, "
                         "train a fresh model when enabling")
+    p.add_argument("--goal-x-min", type=int, default=None,
+                   help="delivery region: success on the goal level only "
+                        "counts at x >= this (steer where a model hands off)")
+    p.add_argument("--goal-x-max", type=int, default=None,
+                   help="delivery region: success only at x <= this")
     p.add_argument("--wait-frames", type=str, default="",
                    help="comma list of 'stand still N frames' actions appended "
                         "to the table (wind levels; e.g. 30,60)")
+    p.add_argument("--wind-jump", type=str, default="",
+                   help="comma list of wind buckets 0..4 to add atomic "
+                        "'wait for bucket B then jump' combos (wind crossings), "
+                        "e.g. 0,4")
     p.add_argument("--wind-obs", action="store_true",
                    help="append wind-phase sin/cos to the observation and "
                         "randomize the phase at every reset (levels 25-31). "

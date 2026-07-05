@@ -38,7 +38,9 @@ import subprocess
 PY = sys.executable
 FWF = "3"                      # frozen project action set for all new levels
 EXTRA = "22,24,28,30"
-WIND_LEVELS = set(range(25, 32))   # weather.py wind_levels: sinusoidal wind
+# weather.py wind_levels are 25-31, but level 24's GOAL transition crosses
+# into windy airspace mid-jump, so 24 trains with the wind package too.
+WIND_LEVELS = set(range(24, 32))
 WAIT = "30,60"                     # wait-action pair used on wind levels
 KNOWN_ACTION_CFGS = {23: ("0", ""), 25: ("3", ""), 37: ("3", EXTRA)}
 

@@ -75,6 +75,17 @@ def main():
                          "windy levels the search teleports reset the wind "
                          "phase, so found paths are proofs for phase 0 only "
                          "-- treat them as route hints, not guarantees.")
+    ap.add_argument("--wait-wind", default=None,
+                    help="comma list of wind buckets 0..4 to add 'wait until "
+                         "wind bucket B' macro actions (e.g. 0,4 for strong "
+                         "left/right).")
+    ap.add_argument("--wind-jump", default=None,
+                    help="comma list of wind buckets 0..4 to add ATOMIC "
+                         "'wait for bucket B then jump' combos (e.g. 0,4). "
+                         "THIS is what lets the search prove wind crossings.")
+    ap.add_argument("--no-wind", action="store_true",
+                    help="disable the wind force -- makes the search a real "
+                         "deterministic proof on levels 25-31")
     ap.add_argument("--grid", type=int, default=4,
                     help="dedup raster in px (smaller = finer but slower)")
     ap.add_argument("--max-depth", type=int, default=12)
@@ -94,6 +105,12 @@ def main():
         kw["extra_charges"] = tuple(int(c) for c in args.extra_charges.split(","))
     if args.wait_frames:
         kw["wait_frames"] = tuple(int(c) for c in args.wait_frames.split(","))
+    if args.wait_wind:
+        kw["wait_wind"] = tuple(int(c) for c in args.wait_wind.split(","))
+    if args.wind_jump:
+        kw["wind_jump"] = tuple(int(c) for c in args.wind_jump.split(","))
+    if args.no_wind:
+        kw["no_wind"] = True
     env = JumpKingEnv(**kw)
     lvl, goal = args.level, args.level + 1
     print(f"level {lvl} -> {goal} | {env.num_actions} actions "

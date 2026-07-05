@@ -56,8 +56,56 @@ import numpy as np
 from Occupancy import build_occupancy_grid, GRID_CELL
 
 
+# Wind force = sin(wind_var) * WIND_AMPLITUDE (see Wind.calculate_wind).
+WIND_AMPLITUDE = 2.5 ** 2                       # 6.25
+# 5 phase buckets by signed force: strong-left, weak-left, calm, weak-right,
+# strong-right. The "wait until bucket B" macro uses these so the agent (and
+# the search) can DETERMINISTICALLY reach any wind state before jumping.
+WIND_BUCKET_EDGES = (-3.0, -0.5, 0.5, 3.0)      # 4 edges -> 5 buckets (0..4)
+N_WIND_BUCKETS = len(WIND_BUCKET_EDGES) + 1
+WIND_JUMP_CHARGES = (8, 12, 16, 20, 26, 32)     # charges for timed jump combos
+
+
+def wind_force(wind_var):
+    return math.sin(wind_var) * WIND_AMPLITUDE
+
+
+def wind_bucket(w):
+    """Classify a wind force into 0..4 (strong-left .. strong-right)."""
+    for i, e in enumerate(WIND_BUCKET_EDGES):
+        if w < e:
+            return i
+    return N_WIND_BUCKETS - 1
+
+
+# Each bucket's "ready" moment is a SINGLE consistent phase (a narrow sin band
+# on the strengthening edge), so the wait macros launch into the exact same
+# wind every time regardless of the episode's starting phase. Strong buckets
+# target near-peak wind (what crossings need); weak buckets a mid value.
+WIND_BUCKET_TARGET_SIN = (-0.9, -0.35, 0.0, 0.35, 0.9)
+WIND_READY_TOL = 0.08
+
+
+def wind_ready(wind_var, target_bucket):
+    """True at the ONE consistent phase per cycle for `target_bucket`: sin near
+    the bucket's target on the strengthening edge (approaching its peak). This
+    makes 'wait for bucket B' deterministic across start phases -- the jump
+    always launches into the identical wind."""
+    s = math.sin(wind_var)
+    tgt = WIND_BUCKET_TARGET_SIN[target_bucket]
+    if abs(s - tgt) > WIND_READY_TOL:
+        return False
+    c = math.cos(wind_var)
+    if target_bucket < 2:
+        return c < 0.0          # strengthening left (sin heading to -1)
+    if target_bucket > 2:
+        return c > 0.0          # strengthening right (sin heading to +1)
+    return c > 0.0              # calm: pick the rising-through-zero crossing
+
+
 def build_action_table(charges=(4, 8, 12, 16, 20, 26, 32), walk_frames=10,
-                       fine_walk_frames=0, extra_charges=(), wait_frames=()):
+                       fine_walk_frames=0, extra_charges=(), wait_frames=(),
+                       wait_wind=(), wind_jump=()):
     """THE canonical action-table layout. Any tool that needs to know what a
     model's action index means (e.g. Play's per-model tables) must build the
     table through this function with that model's OWN action config --
@@ -76,10 +124,24 @@ def build_action_table(charges=(4, 8, 12, 16, 20, 26, 32), walk_frames=10,
     for d in ("left", "up", "right"):
         for c in (extra_charges or ()):
             actions.append(("jump", d, c))
-    # Wait actions (wind levels): stand still N frames to let the wind phase
-    # advance -- the timing tool human players use on levels 25-31.
+    # Fixed-length wait actions (stand still N frames to let the wind advance).
     for f in (wait_frames or ()):
         actions.append(("wait", "none", int(f)))
+    # "Wait until the wind reaches bucket B" macros -- the timing tool. Each
+    # stands still until the wind force enters bucket B (or a one-cycle cap),
+    # then returns control so the NEXT action launches into that wind.
+    for b in (wait_wind or ()):
+        actions.append(("wait_wind", int(b), 1100))
+    # ATOMIC "wait for wind bucket B, then jump" combos. The wait and jump
+    # happen in ONE macro-action, so the search (which resets phase per node)
+    # can still discover wind-assisted crossings. All three directions: UP
+    # (the wind bucket carries it sideways) AND left/right (the near-exit
+    # crossing is a directional max-charge jump ridden by the strong wind).
+    # Encoded as ("jump_wind", (bucket, direction), charge).
+    for b in (wind_jump or ()):
+        for d in ("up", "left", "right"):
+            for c in WIND_JUMP_CHARGES:
+                actions.append(("jump_wind", (int(b), d), c))
     return actions
 
 
@@ -108,10 +170,32 @@ class JumpKingEnv:
                                        # actions appended after the extras,
                                        # e.g. (30, 60) -- lets the agent TIME
                                        # its jumps to the wind phase.
+                 wait_wind=(),         # wind levels: "wait until wind bucket B"
+                                       # macro actions, e.g. (0,1,2,3,4). The
+                                       # timing tool -- deterministically reach
+                                       # a wind state, then jump into it.
+                 wind_jump=(),         # wind levels: ATOMIC "wait for bucket B
+                                       # then jump" combos, e.g. (0,4). Makes
+                                       # wind crossings SEARCH-provable (the
+                                       # wait+jump is one action, immune to the
+                                       # search's per-node phase reset).
                  wind_obs=False,       # append sin/cos of the wind phase to the
                                        # observation scalars (4 -> 6) AND
                                        # randomize the phase at every teleport
                                        # so training covers all phases.
+                 no_wind=False,        # DISABLE the wind force entirely (levels
+                                       # 25-31 become deterministic). One switch,
+                                       # no geometry changes. Use with wind_obs
+                                       # OFF (the phase is meaningless with no
+                                       # force). Keep this consistent between
+                                       # training and play for a level.
+                 goal_x_min=None,      # optional DELIVERY REGION: reaching the
+                 goal_x_max=None,      # goal level only counts as success when
+                                       # the king's x lies in [min, max] -- use
+                                       # to steer a model toward the arrival
+                                       # spot the NEXT level can actually work
+                                       # with. Outside the region the episode
+                                       # continues (he can still walk/jump in).
                  max_steps=600,
                  max_settle_frames=2000,
                  goal_level=None,
@@ -138,7 +222,12 @@ class JumpKingEnv:
         self.fine_walk_frames = int(fine_walk_frames or 0)
         self.extra_charges = tuple(extra_charges or ())
         self.wait_frames = tuple(wait_frames or ())
+        self.wait_wind = tuple(wait_wind or ())
+        self.wind_jump = tuple(wind_jump or ())
         self.wind_obs = bool(wind_obs)
+        self.no_wind = bool(no_wind)
+        self.goal_x_min = goal_x_min
+        self.goal_x_max = goal_x_max
         self.max_steps = int(max_steps)
         self.max_settle_frames = int(max_settle_frames)
         self.goal_level = goal_level          # if set: terminate+reward on reaching it
@@ -263,7 +352,9 @@ class JumpKingEnv:
         self.actions = build_action_table(self.charges, self.walk_frames,
                                           self.fine_walk_frames,
                                           self.extra_charges,
-                                          self.wait_frames)
+                                          self.wait_frames,
+                                          self.wait_wind,
+                                          self.wind_jump)
 
     # ------------------------------------------------------------- curriculum
     def _load_start_states(self, path):
@@ -450,7 +541,8 @@ class JumpKingEnv:
         """Advance the game one logic frame. Skips all cosmetic systems
         (audio/npc/flyer/readable/name/hiddenwall) for speed, but keeps wind,
         because wind perturbs the King's physics on windy levels."""
-        self.levels.update_wind(self.king)             # physics-affecting
+        if not self.no_wind:
+            self.levels.update_wind(self.king)         # physics-affecting
         self.king.update(agentCommand=None)            # full physics + level change
         if self.levels.current_level == self.babe.level:
             # Only relevant at the very top; this is what flips levels.ending.
@@ -473,7 +565,7 @@ class JumpKingEnv:
             if render_cb is not None:
                 render_cb()
 
-        if kind == "jump":
+        def _charge_and_release(jdir, mag):
             # King._check_events fires a jump in TWO ways, and maxJumpCount=30:
             #   (a) while SPACE is held, once jumpCount > maxJumpCount it
             #       auto-fires using whatever arrow is held THAT frame, or "up"
@@ -490,20 +582,45 @@ class JumpKingEnv:
             # the auto-fire reads the held direction instead of defaulting to
             # "up" -- which is the bug that made every long directional jump go
             # straight up. For "up" we hold no arrow, so it fires up either way.
-            hold_left = (direction == "left")
-            hold_right = (direction == "right")
-            for _ in range(magnitude):
+            hold_left = (jdir == "left")
+            hold_right = (jdir == "right")
+            for _ in range(mag):
                 self._set_keys(space=True, left=hold_left, right=hold_right)
                 frame()
-                # Stop charging the instant the king has launched (auto-fire)
-                # or the level is ending; extra charge frames would re-crouch.
                 if self.levels.ending or self.king.isJump or self.king.isFalling:
                     break
-            # Release: drop SPACE, keep the direction held one frame so a
-            # short-charge crouch fires _jump(direction). (No-op if already
-            # airborne from an auto-fire.)
             self._set_keys(left=hold_left, right=hold_right)
             frame()
+
+        def _hold_until_wind(target_bucket, cap):
+            # Wait until wind_ready(target_bucket), HOLDING x against wind drift
+            # by counter-walking toward the spot we started on (the agent's
+            # "move opposite the wind" technique). On deep snow the wind exerts
+            # no force so this is inert; elsewhere it keeps the launch spot
+            # fixed so the crossing is identical from any starting phase.
+            hold_x = self.king.rect_x
+            for _ in range(cap):
+                if self.king.rect_x > hold_x + 1.0:
+                    self._set_keys(left=True)
+                elif self.king.rect_x < hold_x - 1.0:
+                    self._set_keys(right=True)
+                else:
+                    self._set_keys()
+                frame()
+                if self.levels.ending:
+                    break
+                if wind_ready(self.levels.wind.wind_var, target_bucket):
+                    break
+            self._set_keys()
+
+        if kind == "jump":
+            _charge_and_release(direction, magnitude)
+        elif kind == "jump_wind":
+            # ATOMIC wind-timed jump: direction == (target_bucket, jdir).
+            # Hold position until the wind reaches the target, THEN launch.
+            target_b, jdir = direction
+            _hold_until_wind(target_b, 1100)
+            _charge_and_release(jdir, magnitude)
         elif kind == "wait":
             # Stand still and let the world (the wind phase) move on.
             self._set_keys()
@@ -511,6 +628,10 @@ class JumpKingEnv:
                 frame()
                 if self.levels.ending:
                     break
+        elif kind == "wait_wind":
+            # Hold position until the wind reaches the target bucket, so the
+            # NEXT action launches into it. (direction = bucket index.)
+            _hold_until_wind(direction, magnitude)
         else:  # walk
             for _ in range(magnitude):
                 self._set_keys(left=(direction == "left"),
@@ -589,16 +710,12 @@ class JumpKingEnv:
         if y is not None:
             self.king.rect_y = float(y)
 
-        # Wind phase randomization: levels.reset() zeroes wind_var, so without
-        # this every episode would train against the exact same wind timeline
-        # -- and the policy would silently overfit phase 0. In the relay the
-        # king arrives at ARBITRARY phases, so training must cover them all.
-        if self.wind_obs:
-            self.levels.wind.wind_var = float(self.rng.uniform(0.0, 2.0 * math.pi))
-
         self._set_keys()
         # Airborne with zero momentum: gravity grounds him onto whatever is
         # below, and _check_events stays skipped until he has truly landed.
+        # Settle at wind_var=0 (levels.reset zeroed it) so the SETTLED POSITION
+        # is deterministic -- randomizing the phase before this would make the
+        # king land in a different spot every episode on windy levels.
         self.king.isFalling = True
         frames = 0
         while (not self.move_available()
@@ -606,6 +723,13 @@ class JumpKingEnv:
                and not self.levels.ending):
             self._physics_frame()
             frames += 1
+
+        # NOW set the episode's wind phase (after the king is grounded). Without
+        # this every episode would train against the exact same wind timeline
+        # and overfit phase 0; in the relay the king climbs into arbitrary
+        # phases, so training must cover them all.
+        if self.wind_obs:
+            self.levels.wind.wind_var = float(self.rng.uniform(0.0, 2.0 * math.pi))
         return (self.levels.current_level,
                 int(self.king.rect_x), int(self.king.rect_y))
 
@@ -680,9 +804,16 @@ class JumpKingEnv:
             reached_goal = True
             reward += 100.0
         elif self.goal_level is not None and level >= self.goal_level:
-            terminated = True
-            reached_goal = True
-            reward += self.level_reward                # same scale as a normal pass
+            in_region = ((self.goal_x_min is None
+                          or self.king.rect_x >= self.goal_x_min)
+                         and (self.goal_x_max is None
+                              or self.king.rect_x <= self.goal_x_max))
+            if in_region:
+                terminated = True
+                reached_goal = True
+                reward += self.level_reward            # same scale as a normal pass
+            # outside the delivery region: no success yet -- the episode
+            # continues so the king can still move into the region.
 
         # Fall rule: dropped below the level this attempt started on -> the
         # attempt is over. End it as a FAILURE (reached_goal stays False) so the
