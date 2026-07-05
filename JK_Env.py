@@ -543,7 +543,14 @@ class JumpKingEnv:
         because wind perturbs the King's physics on windy levels."""
         if not self.no_wind:
             self.levels.update_wind(self.king)         # physics-affecting
+        prev_level = self.levels.current_level
         self.king.update(agentCommand=None)            # full physics + level change
+        # Wind starts FRESH when the king first enters the windy biome (level
+        # 25). This makes the 24->25 handoff deterministic (the landing no
+        # longer depends on how long the climb took) -- the wind then builds
+        # up from calm as the agent climbs the biome, exactly as in play.
+        if (not self.no_wind and prev_level < 25 <= self.levels.current_level):
+            self.levels.wind.wind_var = 0.0
         if self.levels.current_level == self.babe.level:
             # Only relevant at the very top; this is what flips levels.ending.
             self.babe.update(self.king)

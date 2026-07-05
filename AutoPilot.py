@@ -38,10 +38,9 @@ import subprocess
 PY = sys.executable
 FWF = "3"                      # frozen project action set for all new levels
 EXTRA = "22,24,28,30"
-# weather.py wind_levels are 25-31, but level 24's GOAL transition crosses
-# into windy airspace mid-jump, so 24 trains with the wind package too.
-WIND_LEVELS = set(range(24, 32))
-WAIT = "30,60"                     # wait-action pair used on wind levels
+WIND_LEVELS = set(range(25, 32))   # wind resets to 0 on entry, so 24 is deterministic
+WAIT = "30,60"                     # legacy fixed waits (unused now)
+WIND_JUMP = "0,4"                  # atomic wait-for-wind-then-jump buckets
 KNOWN_ACTION_CFGS = {23: ("0", ""), 25: ("3", ""), 37: ("3", EXTRA)}
 
 
@@ -65,11 +64,12 @@ def ckpt_action_flags(path):
         return (str(int(cfg.get("fine_walk_frames", 0))),
                 ",".join(str(c) for c in cfg.get("extra_charges", [])),
                 ",".join(str(c) for c in cfg.get("wait_frames", [])),
-                bool(cfg.get("wind_obs", False)))
+                bool(cfg.get("wind_obs", False)),
+                ",".join(str(c) for c in cfg.get("wind_jump", [])))
     n = ck["model"]["policy_head.weight"].shape[0]
     if n in KNOWN_ACTION_CFGS:
         fine, extra = KNOWN_ACTION_CFGS[n]
-        return (fine, extra, "", False)
+        return (fine, extra, "", False, "")
     raise SystemExit(f"cannot infer action set of {path} ({n} actions)")
 
 
@@ -100,7 +100,7 @@ def run(cmd, log_path, live=False):
 
 def run_handoff(from_lvl, ckpt, episodes, log_path, out=None):
     """Run Handoff for `from_lvl`'s model; returns (success_rate, new_states)."""
-    pf, pe, pw, pwind = ckpt_action_flags(ckpt)
+    pf, pe, pw, pwind, pwj = ckpt_action_flags(ckpt)
     cmd = [PY, "Handoff.py", "--level", str(from_lvl),
            "--checkpoint", ckpt,
            "--start-states", f"starts_L{from_lvl}.json",
@@ -112,6 +112,8 @@ def run_handoff(from_lvl, ckpt, episodes, log_path, out=None):
         cmd += ["--wait-frames", pw]
     if pwind:
         cmd += ["--wind-obs"]
+    if pwj:
+        cmd += ["--wind-jump", pwj]
     if out:
         cmd += ["--out", out]
     rc, txt = run(cmd, log_path)
@@ -155,7 +157,7 @@ def reconcile(lo, hi, args):
               f"({'new arrivals' if added else ''}"
               f"{' + ' if added and rate < args.gate else ''}"
               f"{'low success' if rate < args.gate else ''})")
-        mf, me, mw, mwind = ckpt_action_flags(my_ck)
+        mf, me, mw, mwind, mwj = ckpt_action_flags(my_ck)
         cmd = [PY, "Train.py",
                "--num-envs", str(args.num_envs), "--rollout", "256",
                "--total-steps", str(args.reconcile_budget),
@@ -175,6 +177,8 @@ def reconcile(lo, hi, args):
             cmd += ["--wait-frames", mw]
         if mwind:
             cmd += ["--wind-obs"]
+        if mwj:
+            cmd += ["--wind-jump", mwj]
         rc, _txt = run(cmd, f"logs/L{lvl}_reconcile_train.log", live=True)
         if rc != 0:
             raise SystemExit(f"reconcile training failed on level {lvl}")
@@ -264,7 +268,7 @@ def main():
                      "--max-depth", "14", "--max-nodes", "2500",
                      "--max-paths", "6", "--emit-starts", starts]
         if windy:
-            graph_cmd += ["--wait-frames", WAIT]
+            graph_cmd += ["--wind-jump", WIND_JUMP]
         rc, out = run(graph_cmd, f"logs/L{lvl}_graph.log")
         if rc != 0 or "NO PATH FOUND" in out:
             raise SystemExit(
@@ -286,9 +290,9 @@ def main():
                      "--stop-at-succ", str(args.stop_succ),
                      "--save-dir", save_dir]
         if windy:
-            # wind levels: agent sees the wind phase, can wait it out, and
-            # trains against randomized phases
-            train_cmd += ["--wind-obs", "--wait-frames", WAIT]
+            # wind levels: agent sees the wind phase and has atomic
+            # wait-for-wind-then-jump combos; trains against randomized phases
+            train_cmd += ["--wind-obs", "--wind-jump", WIND_JUMP]
         rc, out = run(train_cmd, f"logs/L{lvl}_train.log", live=True)
         if rc != 0 or not latest_ckpt(save_dir):
             raise SystemExit(f"training failed on level {lvl}; "
