@@ -127,6 +127,7 @@ def env_factory(args):
         return JumpKingEnv(
             max_steps=args.max_steps,
             goal_level=args.goal_level,
+            transition_fail_y=args.transition_fail_y,
             level_reward=args.level_reward,
             level_penalty=args.level_penalty,
             altitude_breadcrumb=args.altitude_breadcrumb,
@@ -144,6 +145,7 @@ def env_factory(args):
             wait_frames=_parse_charges(args.wait_frames),
             wind_obs=args.wind_obs,
             wind_jump=_parse_charges(args.wind_jump),
+            quarantine_after=args.quarantine_after,
             goal_x_min=args.goal_x_min,
             goal_x_max=args.goal_x_max,
         )
@@ -159,6 +161,7 @@ def smoke(args):
     print("device:", device)
 
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=args.goal_level,
+                      transition_fail_y=args.transition_fail_y,
                       level_reward=args.level_reward, level_penalty=args.level_penalty,
                       altitude_breadcrumb=args.altitude_breadcrumb,
                       start_states=args.start_states, p_bottom=args.p_bottom,
@@ -167,6 +170,7 @@ def smoke(args):
                       wait_frames=_parse_charges(args.wait_frames),
                       wind_obs=args.wind_obs,
                       wind_jump=_parse_charges(args.wind_jump),
+                      quarantine_after=args.quarantine_after,
                       goal_x_min=args.goal_x_min,
                       goal_x_max=args.goal_x_max)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
@@ -333,6 +337,7 @@ def train_visible(args):
     device = get_device()
     print("device:", device, "| VISIBLE single-env training (N=1)")
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=args.goal_level,
+                      transition_fail_y=args.transition_fail_y,
                       level_reward=args.level_reward, level_penalty=args.level_penalty,
                       altitude_breadcrumb=args.altitude_breadcrumb,
                       start_states=args.start_states, p_bottom=args.p_bottom,
@@ -348,6 +353,7 @@ def train_visible(args):
                       wait_frames=_parse_charges(args.wait_frames),
                       wind_obs=args.wind_obs,
                       wind_jump=_parse_charges(args.wind_jump),
+                      quarantine_after=args.quarantine_after,
                       goal_x_min=args.goal_x_min,
                       goal_x_max=args.goal_x_max)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
@@ -435,6 +441,8 @@ def build_argparser():
     p.add_argument("--max-steps", type=int, default=600, help="env step limit per episode")
     p.add_argument("--goal-level", type=int, default=1,
                    help="terminate+reward on reaching this level (curriculum)")
+    p.add_argument("--transition-fail-y", type=int, default=None,
+                   help="treat a level transition into the goal level with rect_y >= this value as a failed episode")
     p.add_argument("--level-reward", type=float, default=10.0)
     p.add_argument("--level-penalty", type=float, default=10.0,
                    help="penalty per level fallen. MUST equal --level-reward "
@@ -498,6 +506,10 @@ def build_argparser():
     p.add_argument("--wait-frames", type=str, default="",
                    help="comma list of 'stand still N frames' actions appended "
                         "to the table (wind levels; e.g. 30,60)")
+    p.add_argument("--quarantine-after", type=int, default=150,
+                   help="consecutive failures before a solvable-looking start "
+                        "state gets benched; raise (e.g. 600) when a state "
+                        "needs a rare multi-action discovery")
     p.add_argument("--wind-jump", type=str, default="",
                    help="comma list of wind buckets 0..4 to add atomic "
                         "'wait for bucket B then jump' combos (wind crossings), "

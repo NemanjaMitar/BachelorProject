@@ -196,9 +196,19 @@ class JumpKingEnv:
                                        # spot the NEXT level can actually work
                                        # with. Outside the region the episode
                                        # continues (he can still walk/jump in).
+                 quarantine_after=150, # consecutive failures (with easier peers
+                                       # mastered) before a start state's sample
+                                       # weight collapses. Raise it (e.g. 600)
+                                       # when a solvable state needs a rare
+                                       # multi-action discovery so it is not
+                                       # benched before the agent finds it.
                  max_steps=600,
                  max_settle_frames=2000,
                  goal_level=None,
+                 transition_fail_y=None,      # if set, reaching the goal level
+                                              # via a level transition with
+                                              # king.rect_y >= this value ends
+                                              # the episode as a failure
                  level_reward=10.0,            # reward per level climbed (the objective)
                  level_penalty=10.0,           # penalty per level fallen (magnitude)
                  altitude_breadcrumb=0.01,     # weak within-level gradient toward the exit
@@ -231,6 +241,8 @@ class JumpKingEnv:
         self.max_steps = int(max_steps)
         self.max_settle_frames = int(max_settle_frames)
         self.goal_level = goal_level          # if set: terminate+reward on reaching it
+        self.transition_fail_y = (None if transition_fail_y is None
+                                  else int(transition_fail_y))
         self.level_reward = float(level_reward)
         self.level_penalty = float(level_penalty)
         self.altitude_breadcrumb = float(altitude_breadcrumb)
@@ -288,7 +300,7 @@ class JumpKingEnv:
         # (disconnected from the exit); its sampling weight collapses so it
         # cannot eat an unattended run. Success clears the counter.
         self._cp_attempts = [0] * len(self._cp_ranked)
-        self.quarantine_after = 150
+        self.quarantine_after = int(quarantine_after)
         self._episode_cp_idx = None            # which checkpoint THIS episode used
 
         self._build_action_table()
@@ -806,21 +818,31 @@ class JumpKingEnv:
 
         reached_goal = False
         terminated = False
+        transition_failed = False
         if self.levels.ending:                       # reached the babe at the top
             terminated = True
             reached_goal = True
             reward += 100.0
         elif self.goal_level is not None and level >= self.goal_level:
-            in_region = ((self.goal_x_min is None
-                          or self.king.rect_x >= self.goal_x_min)
-                         and (self.goal_x_max is None
-                              or self.king.rect_x <= self.goal_x_max))
-            if in_region:
+            transition_failed = (
+                self.transition_fail_y is not None
+                and d_level > 0
+                and self.king.rect_y >= self.transition_fail_y
+            )
+            if transition_failed:
                 terminated = True
-                reached_goal = True
-                reward += self.level_reward            # same scale as a normal pass
-            # outside the delivery region: no success yet -- the episode
-            # continues so the king can still move into the region.
+                reward -= self.level_reward
+            else:
+                in_region = ((self.goal_x_min is None
+                              or self.king.rect_x >= self.goal_x_min)
+                             and (self.goal_x_max is None
+                                  or self.king.rect_x <= self.goal_x_max))
+                if in_region:
+                    terminated = True
+                    reached_goal = True
+                    reward += self.level_reward            # same scale as a normal pass
+                # outside the delivery region: no success yet -- the episode
+                # continues so the king can still move into the region.
 
         # Fall rule: dropped below the level this attempt started on -> the
         # attempt is over. End it as a FAILURE (reached_goal stays False) so the
