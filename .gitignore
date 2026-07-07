@@ -14,3 +14,8 @@ Thumbs.db
 # Scratch / logs
 logs/
 *.tmp
+run_backup_0-42.zip
+checkpoints/*_ppo/
+checkpoints/*_broad/
+checkpoints/*_fix*/
+checkpoints/*_veltest/

@@ -113,16 +113,20 @@ class ModelBank:
             extra = tuple(cfg.get("extra_charges", ()))
             wait = tuple(cfg.get("wait_frames", ()))
             wjump = tuple(cfg.get("wind_jump", ()))
+            approach = tuple(tuple(a) for a in cfg.get("approach_jump", ()))
+            wcombo = tuple(tuple(tuple(s) for s in r)
+                           for r in cfg.get("wind_combo", ()))
             wind = bool(cfg.get("wind_obs", False))
         elif n_act in KNOWN_ACTION_CFGS:
             fine, extra = KNOWN_ACTION_CFGS[n_act]
-            wait, wjump, wind = (), (), False
+            wait, wjump, approach, wcombo, wind = (), (), (), (), False
         else:
             raise SystemExit(
                 f"{path}: {n_act} actions and no stored action_cfg -- cannot "
                 f"reconstruct its action table.")
         table = build_action_table(fine_walk_frames=fine, extra_charges=extra,
-                                   wait_frames=wait, wind_jump=wjump)
+                                   wait_frames=wait, wind_jump=wjump,
+                                   approach_jump=approach, wind_combo=wcombo)
         if len(table) != n_act:
             raise SystemExit(
                 f"{path}: action_cfg gives {len(table)} actions but the "

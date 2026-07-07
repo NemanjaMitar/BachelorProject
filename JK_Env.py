@@ -105,7 +105,7 @@ def wind_ready(wind_var, target_bucket):
 
 def build_action_table(charges=(4, 8, 12, 16, 20, 26, 32), walk_frames=10,
                        fine_walk_frames=0, extra_charges=(), wait_frames=(),
-                       wait_wind=(), wind_jump=()):
+                       wait_wind=(), wind_jump=(), approach_jump=(), wind_combo=()):
     """THE canonical action-table layout. Any tool that needs to know what a
     model's action index means (e.g. Play's per-model tables) must build the
     table through this function with that model's OWN action config --
@@ -142,6 +142,34 @@ def build_action_table(charges=(4, 8, 12, 16, 20, 26, 32), walk_frames=10,
         for d in ("up", "left", "right"):
             for c in WIND_JUMP_CHARGES:
                 actions.append(("jump_wind", (int(b), d), c))
+    # ATOMIC "walk to a target x, then wind-timed jump" macros. For crossings
+    # whose launch WINDOW the net can't perceive (a few px on a uniform shelf,
+    # collapsed by the conv grid): the macro walks deterministically to target_x
+    # on the (windless) snow, holds for the wind bucket, then jumps -- so ONE
+    # action succeeds from anywhere on the shelf and the policy needs no fine
+    # position sense. Each entry is (target_x, bucket, direction, charge).
+    # Encoded as ("approach_jump", (target_x, bucket, direction), charge).
+    for (tx, b, d, c) in (approach_jump or ()):
+        actions.append(("approach_jump", (int(tx), int(b), d), int(c)))
+    # ATOMIC multi-step wind route: a whole short windy level's proven sequence
+    # of wind-jumps executed as ONE action (settling between steps). This makes
+    # the entire level a single decision at the entry, so no intermediate state
+    # -- which the 8px conv grid often can't tell apart from its neighbour -- is
+    # ever a decision point. Each combo is a tuple of (bucket, direction, charge)
+    # steps. Encoded as ("wind_combo", combo_index, steps_tuple).
+    for i, steps in enumerate(wind_combo or ()):
+        enc = []
+        for s in steps:
+            if s[0] == "walk":                 # ("walk", target_x): reposition
+                enc.append(("walk", int(s[1])))
+            elif s[0] == "settle":             # ("settle",): kill ice momentum
+                enc.append(("settle", 0))
+            elif s[0] == "jump":               # ("jump", dir, charge): plain jump
+                enc.append(("jump", s[1], int(s[2])))   # (windless/ice levels)
+            else:                              # (bucket, dir, charge): wind-jump
+                b, d, c = s
+                enc.append((int(b), d, int(c)))
+        actions.append(("wind_combo", int(i), tuple(enc)))
     return actions
 
 
@@ -179,10 +207,29 @@ class JumpKingEnv:
                                        # wind crossings SEARCH-provable (the
                                        # wait+jump is one action, immune to the
                                        # search's per-node phase reset).
+                 approach_jump=(),     # wind levels: ATOMIC "walk to target_x,
+                                       # then wait-for-bucket-then-jump" combos,
+                                       # each (target_x, bucket, direction,
+                                       # charge). For crossings whose launch
+                                       # window is too small for the conv grid
+                                       # to perceive -- one action crosses from
+                                       # anywhere on the shelf.
+                 wind_combo=(),        # wind levels: ATOMIC multi-step wind
+                                       # routes, each a tuple of (bucket,dir,
+                                       # charge) steps -- encodes a whole short
+                                       # windy level's proven sequence as one
+                                       # action so intermediate (perceptually
+                                       # ambiguous) states are never decisions.
                  wind_obs=False,       # append sin/cos of the wind phase to the
                                        # observation scalars (4 -> 6) AND
                                        # randomize the phase at every teleport
                                        # so training covers all phases.
+                 vel_obs=False,        # append the king's (vx, vy) velocity to
+                                       # the scalars. On ICE the king keeps
+                                       # sliding at a grounded decision point, so
+                                       # position alone aliases momentum states;
+                                       # velocity makes them distinguishable ->
+                                       # lets PPO genuinely learn icy levels.
                  no_wind=False,        # DISABLE the wind force entirely (levels
                                        # 25-31 become deterministic). One switch,
                                        # no geometry changes. Use with wind_obs
@@ -234,7 +281,11 @@ class JumpKingEnv:
         self.wait_frames = tuple(wait_frames or ())
         self.wait_wind = tuple(wait_wind or ())
         self.wind_jump = tuple(wind_jump or ())
+        self.approach_jump = tuple(tuple(a) for a in (approach_jump or ()))
+        self.wind_combo = tuple(tuple(tuple(s) for s in r)
+                                for r in (wind_combo or ()))
         self.wind_obs = bool(wind_obs)
+        self.vel_obs = bool(vel_obs)
         self.no_wind = bool(no_wind)
         self.goal_x_min = goal_x_min
         self.goal_x_max = goal_x_max
@@ -347,7 +398,7 @@ class JumpKingEnv:
         self.grid_h = self.screen_h // self.grid_cell
         self.grid_w = self.screen_w // self.grid_cell
         self.grid_shape = (3, self.grid_h, self.grid_w)
-        self.n_scalars = 6 if self.wind_obs else 4
+        self.n_scalars = 4 + (2 if self.wind_obs else 0) + (2 if self.vel_obs else 0)
         self._grid_flat = 3 * self.grid_h * self.grid_w
         self.obs_dim = self._grid_flat + self.n_scalars
         self.num_actions = len(self.actions)
@@ -366,7 +417,9 @@ class JumpKingEnv:
                                           self.extra_charges,
                                           self.wait_frames,
                                           self.wait_wind,
-                                          self.wind_jump)
+                                          self.wind_jump,
+                                          self.approach_jump,
+                                          self.wind_combo)
 
     # ------------------------------------------------------------- curriculum
     def _load_start_states(self, path):
@@ -611,6 +664,51 @@ class JumpKingEnv:
             self._set_keys(left=hold_left, right=hold_right)
             frame()
 
+        def _walk_to_x(target_x, cap):
+            # Walk (either direction) until within a couple px of target_x, on
+            # the windless snow shelf this is fully deterministic. Lets one
+            # macro reach the crossing window from anywhere on the shelf.
+            for _ in range(cap):
+                dx = self.king.rect_x - target_x
+                if dx < -2.0:
+                    self._set_keys(right=True)
+                elif dx > 2.0:
+                    self._set_keys(left=True)
+                else:
+                    break
+                frame()
+                if self.levels.ending or self.king.isFalling:
+                    break
+            self._set_keys()
+
+        def _kill_momentum(cap=400, eps=0.001, min_frames=20):
+            # ICE: after a horizontal jump the king keeps sliding (slip>0) and
+            # move_available() returns True WHILE still moving -- so a plain-jump
+            # combo would launch mid-slide, and that residual speed makes the next
+            # jump land somewhere else (breaks the handoff). Just let the slide
+            # finish: with no keys held, friction (speed*=slip each frame) damps
+            # it to a deterministic natural stop. Active counter-walk is worse on
+            # ice (each direction switch re-accelerates). On non-ice slip==0 so
+            # speed is already 0 and this returns immediately.
+            for k in range(cap):
+                # settle to a canonical AT-REST state: run at least min_frames
+                # (so a just-crossed king whose move_available fired early -- non-
+                # resting angle/flags -- fully stabilizes) then until speed ~= 0.
+                if k >= min_frames and self.king.speed <= eps:
+                    break
+                self._set_keys()
+                frame()
+                if self.levels.ending or self.king.isFalling:
+                    break
+            self._set_keys()
+            # canonicalize the AT-REST state to match a fresh teleport: a king
+            # that just crossed levels can be grounded+stopped but keep a stale
+            # facing angle (e.g. 3.8 vs the resting pi/2), which changes the very
+            # next jump. Reset it so a combo's jumps reproduce their searched path.
+            if not self.king.isFalling and not self.king.isJump:
+                self.king.speed = 0.0
+                self.king.angle = math.pi / 2
+
         def _hold_until_wind(target_bucket, cap):
             # Wait until wind_ready(target_bucket), HOLDING x against wind drift
             # by counter-walking toward the spot we started on (the agent's
@@ -640,6 +738,44 @@ class JumpKingEnv:
             target_b, jdir = direction
             _hold_until_wind(target_b, 1100)
             _charge_and_release(jdir, magnitude)
+        elif kind == "approach_jump":
+            # ATOMIC "walk to target_x, then wind-timed jump".
+            # direction == (target_x, target_bucket, jdir).
+            target_x, target_b, jdir = direction
+            _walk_to_x(target_x, 600)
+            _hold_until_wind(target_b, 1100)
+            _charge_and_release(jdir, magnitude)
+        elif kind == "wind_combo":
+            # ATOMIC multi-step wind route: magnitude is a tuple of
+            # (bucket, jdir, charge) steps. Execute each wind-timed jump in
+            # sequence, settling between so the next hold-until-wind starts
+            # grounded. Bail out early if the king leaves the start level.
+            for step in magnitude:
+                if step[0] == "walk":
+                    # deterministic reposition to a fixed launch x (snow ledge is
+                    # windless) -> makes the combo robust to entry-x variance
+                    _walk_to_x(int(step[1]), 600)
+                    continue
+                if step[0] == "settle":
+                    # ICE: counter-walk off the arrival momentum before launching
+                    _kill_momentum()
+                    continue
+                if step[0] == "jump":
+                    # plain jump, no wind wait (windless / ice levels)
+                    _charge_and_release(step[1], int(step[2]))
+                else:
+                    b, jd, c = step
+                    _hold_until_wind(b, 1100)
+                    _charge_and_release(jd, c)
+                self._set_keys()
+                f = 0
+                while (not self.move_available()
+                       and f < self.max_settle_frames
+                       and not self.levels.ending):
+                    frame()
+                    f += 1
+                if self.levels.ending:
+                    break
         elif kind == "wait":
             # Stand still and let the world (the wind phase) move on.
             self._set_keys()
@@ -698,6 +834,12 @@ class JumpKingEnv:
             # is heading (cos). Together they make windy levels Markov again.
             wv = float(self.levels.wind.wind_var)
             vals += [math.sin(wv), math.cos(wv)]
+        if self.vel_obs:
+            # (vx, vy) = the actual per-frame displacement (King.py: rect_x +=
+            # sin(a)*speed, rect_y -= cos(a)*speed), normalized by maxSpeed=11.
+            # ~0 at rest / on non-ice; nonzero mid-slide on ice -> momentum state.
+            s, a = float(self.king.speed), float(self.king.angle)
+            vals += [math.sin(a) * s / 11.0, -math.cos(a) * s / 11.0]
         scalars = np.array(vals, dtype=np.float32)
         return np.concatenate([grid.ravel(), scalars]).astype(np.float32)
 

@@ -69,6 +69,28 @@ def _parse_charges(s):
     return tuple(int(c) for c in s.split(",")) if s else ()
 
 
+def _parse_approach(s):
+    """'220:0:left:32' -> (220,0,'left',32); comma-separate multiple."""
+    out = []
+    for item in (s.split(",") if s else []):
+        tx, b, d, c = item.split(":")
+        out.append((int(tx), int(b), d, int(c)))
+    return tuple(out)
+
+
+def _parse_combo(s):
+    """'0:up:12;0:left:32;4:up:32' -> one route of (bucket,dir,charge) steps;
+    separate multiple routes with '|'."""
+    routes = []
+    for route in (s.split("|") if s else []):
+        steps = []
+        for st in route.split(";"):
+            b, d, c = st.split(":")
+            steps.append((int(b), d, int(c)))
+        routes.append(tuple(steps))
+    return tuple(routes)
+
+
 def _expand_policy_head(state, net):
     """Allow resuming a checkpoint with FEWER actions than the current net
     (extra actions are appended to the table, so old indices keep their
@@ -143,8 +165,10 @@ def env_factory(args):
             fine_walk_frames=args.fine_walk_frames,
             extra_charges=_parse_charges(args.extra_charges),
             wait_frames=_parse_charges(args.wait_frames),
-            wind_obs=args.wind_obs,
+            wind_obs=args.wind_obs, vel_obs=args.vel_obs,
             wind_jump=_parse_charges(args.wind_jump),
+            approach_jump=_parse_approach(args.approach_jump),
+            wind_combo=_parse_combo(args.wind_combo),
             quarantine_after=args.quarantine_after,
             goal_x_min=args.goal_x_min,
             goal_x_max=args.goal_x_max,
@@ -168,8 +192,10 @@ def smoke(args):
                       fine_walk_frames=args.fine_walk_frames,
                       extra_charges=_parse_charges(args.extra_charges),
                       wait_frames=_parse_charges(args.wait_frames),
-                      wind_obs=args.wind_obs,
+                      wind_obs=args.wind_obs, vel_obs=args.vel_obs,
                       wind_jump=_parse_charges(args.wind_jump),
+                      approach_jump=_parse_approach(args.approach_jump),
+                      wind_combo=_parse_combo(args.wind_combo),
                       quarantine_after=args.quarantine_after,
                       goal_x_min=args.goal_x_min,
                       goal_x_max=args.goal_x_max)
@@ -296,7 +322,9 @@ def train(args):
                             "extra_charges": list(_parse_charges(args.extra_charges)),
                             "wait_frames": list(_parse_charges(args.wait_frames)),
                             "wind_jump": list(_parse_charges(args.wind_jump)),
-                            "wind_obs": args.wind_obs}}
+                            "approach_jump": [list(a) for a in _parse_approach(args.approach_jump)],
+                            "wind_combo": [[list(s) for s in r] for r in _parse_combo(args.wind_combo)],
+                            "wind_obs": args.wind_obs, "vel_obs": args.vel_obs}}
 
         # Early stop for the automated pipeline: curriculum fully unlocked and
         # recent success high enough -> the level is solved, don't burn budget.
@@ -351,8 +379,10 @@ def train_visible(args):
                       fine_walk_frames=args.fine_walk_frames,
                       extra_charges=_parse_charges(args.extra_charges),
                       wait_frames=_parse_charges(args.wait_frames),
-                      wind_obs=args.wind_obs,
+                      wind_obs=args.wind_obs, vel_obs=args.vel_obs,
                       wind_jump=_parse_charges(args.wind_jump),
+                      approach_jump=_parse_approach(args.approach_jump),
+                      wind_combo=_parse_combo(args.wind_combo),
                       quarantine_after=args.quarantine_after,
                       goal_x_min=args.goal_x_min,
                       goal_x_max=args.goal_x_max)
@@ -426,7 +456,9 @@ def train_visible(args):
                             "extra_charges": list(_parse_charges(args.extra_charges)),
                             "wait_frames": list(_parse_charges(args.wait_frames)),
                             "wind_jump": list(_parse_charges(args.wind_jump)),
-                            "wind_obs": args.wind_obs}},
+                            "approach_jump": [list(a) for a in _parse_approach(args.approach_jump)],
+                            "wind_combo": [[list(s) for s in r] for r in _parse_combo(args.wind_combo)],
+                            "wind_obs": args.wind_obs, "vel_obs": args.vel_obs}},
                        path)
             print("saved", path)
     env.close()
@@ -514,10 +546,24 @@ def build_argparser():
                    help="comma list of wind buckets 0..4 to add atomic "
                         "'wait for bucket B then jump' combos (wind crossings), "
                         "e.g. 0,4")
+    p.add_argument("--approach-jump", type=str, default="",
+                   help="atomic 'walk to target_x, then wind-timed jump' macros "
+                        "for crossings whose launch window the conv grid can't "
+                        "perceive. Format target_x:bucket:dir:charge, comma-"
+                        "separated. e.g. 220:0:left:32")
+    p.add_argument("--wind-combo", type=str, default="",
+                   help="atomic multi-step wind route(s): steps 'bucket:dir:"
+                        "charge' joined by ';', multiple routes by '|'. Encodes "
+                        "a whole short windy level as one action. e.g. "
+                        "0:up:12;0:left:32;4:up:32;4:up:32")
     p.add_argument("--wind-obs", action="store_true",
                    help="append wind-phase sin/cos to the observation and "
                         "randomize the phase at every reset (levels 25-31). "
                         "CHANGES obs size: needs a fresh model.")
+    p.add_argument("--vel-obs", action="store_true",
+                   help="append the king's (vx,vy) velocity to the observation "
+                        "so momentum is observable (icy levels 36-38). "
+                        "CHANGES obs size: needs a fresh/warm-started model.")
     p.add_argument("--stop-at-succ", type=float, default=None,
                    help="stop training early once the curriculum is fully "
                         "unlocked and recent success reaches this rate "
