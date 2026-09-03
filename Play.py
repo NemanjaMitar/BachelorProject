@@ -325,6 +325,8 @@ def main():
         net_table = None
         net_select = None
         net_lvl = None
+        held_lvl = -1            # the level whose model is in use
+        held_own = False         # ...and whether it is that level's OWN
 
         while not done:
             handle_events()
@@ -337,11 +339,27 @@ def main():
                     if net is not None and cand[0] is not net:
                         print(f"\n>>> level {lvl}: switching to model L{lvl}")
                     net, net_table, net_select = cand
+                    held_lvl, held_own = lvl, True
+                elif held_own and lvl > held_lvl:
+                    # A SPANNED SCREEN, NOT A GAP. Screens 24 and 41 are climbed
+                    # THROUGH and never stood on -- the routes for 23 and 40
+                    # cross them mid-route -- so no model was ever trained there.
+                    # Keep the policy that is mid-route: reaching for the
+                    # --checkpoint fallback here hands the screen to the levels
+                    # 0-3 model, which has no idea where it is and falls. Only
+                    # UPWARD (lvl > held_lvl): after a fall the held model knows
+                    # nothing about the screen the king landed on, and that
+                    # really is a break. Same rule as FullRelay.run_trial.
+                    if lvl not in warned_levels:
+                        print(f"\n>>> level {lvl}: no L{lvl} model -- crossed "
+                              f"mid-route by L{held_lvl}'s policy")
+                        warned_levels.add(lvl)
                 elif fallback is not None:
                     if net is not None and net is not fallback[0]:
                         print(f"\n>>> level {lvl}: no L{lvl} model, using the "
                               f"--checkpoint fallback")
                     net, net_table, net_select = fallback
+                    held_lvl, held_own = lvl, False
                 elif net is not None:
                     if lvl not in warned_levels:
                         print(f"\n>>> level {lvl}: no model found, keeping the "

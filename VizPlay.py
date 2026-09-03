@@ -195,6 +195,8 @@ def main():
         steps = 0
         m = None
         net_lvl = None
+        held_lvl = -1            # the level whose model is in use
+        held_own = False         # ...and whether it is that level's OWN
 
         while not done:
             for event in pygame.event.get():
@@ -206,12 +208,22 @@ def main():
                 cand = bank.for_level(lvl)
                 if cand is not None:
                     m = cand
+                    held_lvl, held_own = lvl, True
+                elif held_own and lvl > held_lvl:
+                    # A SPANNED SCREEN, NOT A GAP. 24 and 41 are climbed THROUGH
+                    # and never stood on, so no model was ever trained there --
+                    # keep the policy that is mid-route. Falling back to
+                    # --checkpoint here would hand the screen to the levels 0-3
+                    # model and drop the king. Only UPWARD: after a fall the held
+                    # model does not know the screen. Same rule as
+                    # FullRelay.run_trial.
+                    print(f"\n>>> level {lvl}: no L{lvl} model -- crossed "
+                          f"mid-route by L{held_lvl}'s policy")
                 elif fallback is not None:
                     m = fallback
+                    held_lvl, held_own = lvl, False
                 elif m is None:
                     print(f"no model for level {lvl}"); env.close(); sys.exit(1)
-                # a screen with no model of its own keeps the one that is
-                # mid-route: 24 and 41 are climbed THROUGH, never stood on
                 env.actions = m["tbl"]
                 env.num_actions = len(m["tbl"])
                 net_lvl = lvl
