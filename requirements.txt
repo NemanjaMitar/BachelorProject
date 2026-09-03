@@ -1,13 +1,26 @@
-# Jump King RL pipeline -- tested on Python 3.13 / Windows
-# (torch installs the CPU build from PyPI by default on Windows, which is
-#  what the pipeline uses; a CUDA build works too if the other PC has a GPU)
-pygame==2.6.1
-numpy==2.5.0
-torch~=2.12
-cloudpickle==3.1.2
-# pygame 2.6.1 still imports pkg_resources; newer setuptools removed it
+# Jump King RL pipeline
+#
+# Floors, not pins: an exact pin only resolves on the Python it was frozen for.
+# numpy 2.5 has no wheel below Python 3.11, so `numpy==2.5.0` fails outright on
+# an older interpreter with "No matching distribution found".
+#
+# Developed and measured on Python 3.13.14 / Windows with:
+#   pygame 2.6.1, numpy 2.5.0, torch 2.12.1+cpu, cloudpickle 3.1.2
+# torch installs the CPU build from PyPI by default on Windows, which is what
+# the pipeline uses; a CUDA build works too if the machine has a GPU.
+
+# --- to run the agent (FullRelay.py, tools/relay_bundle.py, Play.py, VizPlay.py)
+pygame>=2.6
+numpy>=1.26
+torch>=2.4
+# pygame 2.6.1 still imports pkg_resources; setuptools 81 removed it
 setuptools<81
-# charts (ChartLogs.py, tools/thesis/*) and the notebook figures
+
+# --- to train (Train.py, tools/train_ice.py)
+cloudpickle>=3.0
+
+# --- charts and thesis figures (ChartLogs.py, tools/thesis/*)
 matplotlib>=3.8
+
 # optional -- only needed to run JumpKing_PPO_walkthrough.ipynb:
 #   pip install jupyter
