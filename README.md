@@ -9,7 +9,14 @@ Reproduce the run:
 ```bash
 python tools/relay_bundle.py           # headless: plays 0 -> top, flags any FALL or STALL
 python tools/relay_bundle.py --play    # the same climb, in a real window
+python tools/relay_bundle.py --viz     # ...with the network's output beside the game
 ```
+
+`--viz` opens the game on the left and a live panel on the right: the action
+probabilities of the screen's own policy, the observation scalars it actually
+reads (the ones it does not are greyed out), `V(s)`, and the conv / trunk
+activations. It follows the handoff, so the panel switches to the next screen's
+model at the seam.
 
 ## The relay
 

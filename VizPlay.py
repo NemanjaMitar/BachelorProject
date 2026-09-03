@@ -23,15 +23,23 @@ import numpy as np
 import torch
 import pygame
 
-from Play import latest_ckpt, scan_action_cfg, KNOWN_ACTION_CFGS  # noqa: E402
-from JK_Env import JumpKingEnv, build_action_table                # noqa: E402
-from PPO import ActorCritic, get_device                           # noqa: E402
-from NNViz import NNVisualizer                                    # noqa: E402
+from Play import latest_ckpt, scan_action_cfg                   # noqa: E402
+from JK_Env import JumpKingEnv, obs_selector                   # noqa: E402
+from PPO import get_device                                     # noqa: E402
+from Occupancy import SUPPORTED_CHANNELS                       # noqa: E402
+from NNViz import NNVisualizer                                 # noqa: E402
+import FullRelay as FR                                         # noqa: E402
 
 
 class VizModelBank:
-    """Like Play.ModelBank, but supports vel_obs checkpoints and installs
-    forward hooks that expose conv / trunk activations."""
+    """FullRelay's loader plus the forward hooks the side panel reads.
+
+    The relay serves models trained on different observation families, so the
+    env is built as the SUPERSET and every model gets the selector that narrows
+    it to its own planes and scalar columns -- the same binding FullRelay.bind
+    does. Slicing scalar columns by hand (what this used to do) silently feeds a
+    model whose grid channels differ from the env's the WRONG planes: an ice
+    model wants solid+slope, and it would have been handed solid+king instead."""
 
     def __init__(self, env, device, model_dir, acts_store):
         self.env, self.device, self.model_dir = env, device, model_dir
@@ -43,62 +51,56 @@ class VizModelBank:
             self.acts[name] = out.detach().cpu().numpy().ravel()
         return fn
 
-    def load(self, path):
-        ckpt = torch.load(path, map_location=self.device, weights_only=False)
-        n_act = ckpt["model"]["policy_head.weight"].shape[0]
-        cfg = ckpt.get("action_cfg")
-        if cfg is not None:
-            fine = int(cfg.get("fine_walk_frames", 0))
-            extra = tuple(cfg.get("extra_charges", ()))
-            wait = tuple(cfg.get("wait_frames", ()))
-            wjump = tuple(cfg.get("wind_jump", ()))
-            approach = tuple(tuple(a) for a in cfg.get("approach_jump", ()))
-            wcombo = tuple(tuple(tuple(s) for s in r)
-                           for r in cfg.get("wind_combo", ()))
-            wind = bool(cfg.get("wind_obs", False))
-            vel = bool(cfg.get("vel_obs", False))
-            settle = bool(cfg.get("settle_action", False))
-        elif n_act in KNOWN_ACTION_CFGS:
-            fine, extra = KNOWN_ACTION_CFGS[n_act]
-            wait, wjump, approach, wcombo, wind, vel = (), (), (), (), False, False
-            settle = False
-        else:
-            raise SystemExit(f"{path}: no action_cfg, {n_act} actions")
-        table = build_action_table(fine_walk_frames=fine, extra_charges=extra,
-                                   wait_frames=wait, wind_jump=wjump,
-                                   approach_jump=approach, wind_combo=wcombo,
-                                   settle_action=settle)
-        if len(table) != n_act:
-            raise SystemExit(f"{path}: table {len(table)} != head {n_act}")
-        # env obs scalar superset: [x, y, level, alt, wind_sin, wind_cos, vx, vy]
-        cols = [0, 1, 2, 3] + ([4, 5] if wind else []) + ([6, 7] if vel else [])
-        n_scal = len(cols)
-        net = ActorCritic(self.env._grid_flat + n_scal, n_act,
-                          grid_shape=self.env.grid_shape,
-                          n_scalars=n_scal).to(self.device)
-        net.load_state_dict(ckpt["model"])
-        net.eval()
+    def load(self, path, level=0):
+        m = FR.load(level, (self.env.grid_h, self.env.grid_w), path=path)
+        if m is None:
+            raise SystemExit(f"{path}: no such checkpoint")
+        m["sel"] = obs_selector(self.env, m["ch"], m["wo"], m["vo"],
+                                m["name"], m.get("venc"))
+        m["mask"] = scalar_mask(self.env, m)
+        net = m["net"]
         net.conv[-1].register_forward_hook(self._hook("conv"))   # Flatten out
         net.trunk[1].register_forward_hook(self._hook("h1"))     # tanh 1
         net.trunk[3].register_forward_hook(self._hook("h2"))     # tanh 2
-        print(f"loaded {path} ({n_act} actions"
-              f"{', wind' if wind else ''}{', vel' if vel else ''})")
-        return net, table, cols, os.path.basename(path)
+        print(f"loaded {path} ({len(m['tbl'])} actions, "
+              f"channels {','.join(m['ch'])}"
+              f"{', wind' if m['wo'] else ''}{', vel' if m['vo'] else ''})")
+        return m
 
     def for_level(self, lvl):
         if lvl in self._cache:
             return self._cache[lvl]
-        net = None
+        m = None
         if self.model_dir:
             d = os.path.join(self.model_dir, f"L{lvl}")
             path = latest_ckpt(d) if os.path.isdir(d) else None
             if path:
                 try:
-                    net = self.load(path)
+                    m = self.load(path, lvl)
                 except Exception as e:
                     print(f"WARNING: {path}: {e}")
-        self._cache[lvl] = net
-        return net
+        self._cache[lvl] = m
+        return m
+
+
+def scalar_mask(env, m):
+    """Which of the env's scalar columns this model actually reads.
+
+    Cosmetic -- the panel greys out the rest. The packing order is the one
+    obs_selector documents: [x, y, level, altitude] (+ wind) (+ velocity)."""
+    n = len(env._obs()) - env._grid_flat
+    mask = [False] * n
+    for i in range(min(4, n)):
+        mask[i] = True
+    if m["wo"]:
+        for i in (4, 5):
+            if i < n:
+                mask[i] = True
+    if m["vo"]:
+        base = 6 if env.wind_obs else 4
+        for i in range(base, min(base + 2, n)):
+            mask[i] = True
+    return mask
 
 
 def main():
@@ -140,9 +142,12 @@ def main():
     print(f"env action set: fine_walk_frames={fine} extra_charges={extra}")
 
     device = get_device()
+    # THE relay env: every supported grid channel and the widest scalar vector,
+    # so a model trained on any subset can be served here (see FullRelay.build_env)
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=args.goal_level,
                       fine_walk_frames=fine, extra_charges=extra,
-                      wind_jump=(0, 4), wind_obs=True, vel_obs=True)
+                      wind_jump=(0, 4), wind_obs=True, vel_obs=True,
+                      vel_encoding="both", grid_channels=SUPPORTED_CHANNELS)
 
     acts = {}
     bank = VizModelBank(env, device, args.model_dir, acts)
@@ -188,7 +193,7 @@ def main():
         done = False
         ep_ret = 0.0
         steps = 0
-        net = table = cols = mname = None
+        m = None
         net_lvl = None
 
         while not done:
@@ -200,36 +205,35 @@ def main():
             if lvl != net_lvl:
                 cand = bank.for_level(lvl)
                 if cand is not None:
-                    net, table, cols, mname = cand
+                    m = cand
                 elif fallback is not None:
-                    net, table, cols, mname = fallback
-                elif net is None:
+                    m = fallback
+                elif m is None:
                     print(f"no model for level {lvl}"); env.close(); sys.exit(1)
-                env.actions = table
-                env.num_actions = len(table)
+                # a screen with no model of its own keeps the one that is
+                # mid-route: 24 and 41 are climbed THROUGH, never stood on
+                env.actions = m["tbl"]
+                env.num_actions = len(m["tbl"])
                 net_lvl = lvl
 
-            grid = obs[:env._grid_flat]
             scal = obs[env._grid_flat:]
-            ob = np.concatenate([grid, scal[cols]]).astype(np.float32)
-            obt = torch.as_tensor(ob, device=device).unsqueeze(0)
+            obt = torch.as_tensor(m["sel"](obs), device=device).float().unsqueeze(0)
             with torch.no_grad():
-                logits, value = net(obt)
+                logits, value = m["net"](obt)
                 probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
             a = (torch.distributions.Categorical(logits=logits).sample().item()
                  if args.stochastic else int(np.argmax(probs)))
 
-            mask = [c in cols for c in range(len(scal))]
-            viz.update(action_probs=probs, actions=table, selected_action=a,
-                       state=list(scal), state_mask=mask, value=float(value),
-                       episode=ep, level=lvl, model_name=mname,
+            viz.update(action_probs=probs, actions=m["tbl"], selected_action=a,
+                       state=list(scal), state_mask=m["mask"], value=float(value),
+                       episode=ep, level=lvl, model_name=m["name"],
                        conv_out=acts.get("conv"),
                        actor_h1=acts.get("h1"), actor_h2=acts.get("h2"))
 
             # For macro routes, show the primitive being executed live instead
             # of the macro's index name: advance one label per jump launch.
             from NNViz import ARROW
-            act = table[a]
+            act = m["tbl"][a]
             step_labels, step_state = [], {"i": 0, "air": False}
             if act[0] == "wind_combo":
                 for s in act[2]:

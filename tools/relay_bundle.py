@@ -161,14 +161,19 @@ def unpack(path, stage):
     return b, base
 
 
-def play(path, stage):
+def play(path, stage, viz=False, extra=()):
     b, base = unpack(path, stage)
     print(f"unpacked {len(b['levels'])} screens into {stage}/\n")
     env = dict(os.environ)
     for k in ("SDL_VIDEODRIVER", "SDL_AUDIODRIVER"):
         env.pop(k, None)
-    return subprocess.call([sys.executable, "Play.py",
-                            "--checkpoint", base, "--model-dir", stage], env=env)
+    # VizPlay puts the game on the left and the network on the right: the action
+    # probabilities, the scalars the model actually reads, V(s), and the conv /
+    # trunk activations -- of whichever screen's policy is driving right now.
+    script = "VizPlay.py" if viz else "Play.py"
+    return subprocess.call([sys.executable, script,
+                            "--checkpoint", base, "--model-dir", stage,
+                            *extra], env=env)
 
 
 def run(path, trials, seed, frm):
@@ -201,13 +206,15 @@ def main():
     ap.add_argument("--build", action="store_true", help="repack from checkpoints/")
     ap.add_argument("--list", action="store_true", help="show what is inside")
     ap.add_argument("--play", action="store_true", help="watch it in a window")
+    ap.add_argument("--viz", action="store_true",
+                    help="watch it with the live network panel beside the game")
     ap.add_argument("--unpack", metavar="DIR", default=None,
                     help="write the bundle out as a checkpoints/-shaped tree")
     ap.add_argument("--stage-dir", default="checkpoints_bundle")
     ap.add_argument("--trials", type=int, default=3)
     ap.add_argument("--seed", type=int, default=20260826)
     ap.add_argument("--from", dest="frm", type=int, default=0)
-    args = ap.parse_args()
+    args, rest = ap.parse_known_args()   # anything else is passed to Play/VizPlay
 
     if args.build:
         return build(args.bundle)
@@ -217,8 +224,8 @@ def main():
         b, _ = unpack(args.bundle, args.unpack)
         print(f"unpacked {len(b['levels'])} screens into {args.unpack}/")
         return 0
-    if args.play:
-        return play(args.bundle, args.stage_dir)
+    if args.play or args.viz:
+        return play(args.bundle, args.stage_dir, viz=args.viz, extra=rest)
     return run(args.bundle, args.trials, args.seed, args.frm)
 
 
