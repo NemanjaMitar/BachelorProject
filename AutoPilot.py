@@ -6,13 +6,16 @@ level after level, and stops loudly when a level genuinely needs attention.
 Per level N it chains (each stage a subprocess -- pygame state stays isolated):
 
   1. HANDOFF   run level N-1's model, bank its real arrival states into
-               starts_LN.json. Doubles as the GATE: if the previous model's
+               starts/starts_LN.json. Doubles as the GATE: if the previous model's
                success rate is below --gate, the chain stops (previous level
                was not actually solid).
   2. AUTOSEED  add ~--seeds spread standing spots from the level geometry.
   3. LEVELGRAPH prove a route to level N+1 exists and emit the path states
                as graded curriculum. "NO PATH" stops the chain.
   4. TRAIN     fresh model, standard recipe, early-stops at --stop-succ.
+
+
+
   5. loop      -> level N+1 (its handoff evaluates + feeds from this model).
 
 All NEW levels train with the project's frozen action set:
@@ -103,7 +106,7 @@ def run_handoff(from_lvl, ckpt, episodes, log_path, out=None):
     pf, pe, pw, pwind, pwj = ckpt_action_flags(ckpt)
     cmd = [PY, "Handoff.py", "--level", str(from_lvl),
            "--checkpoint", ckpt,
-           "--start-states", f"starts_L{from_lvl}.json",
+           "--start-states", f"starts/starts_L{from_lvl}.json",
            "--episodes", str(episodes),
            "--fine-walk-frames", pf]
     if pe:
@@ -127,7 +130,7 @@ def run_handoff(from_lvl, ckpt, episodes, log_path, out=None):
 
 def reconcile(lo, hi, args):
     """Seal the relay across an already-trained band: for each level N in
-    [lo, hi], bank level N-1's real arrivals into starts_LN.json, evaluate
+    [lo, hi], bank level N-1's real arrivals into starts/starts_LN.json, evaluate
     model N from its (now enriched) pool, and briefly resume its training
     when new arrivals appeared or its success rate is below the gate."""
     for lvl in range(lo, hi + 1):
@@ -143,7 +146,7 @@ def reconcile(lo, hi, args):
                                            args.handoff_episodes,
                                            f"logs/L{lvl}_reconcile_in.log")
             print(f"level {lvl-1} delivers with success {rate_prev:.2f}; "
-                  f"{added} new arrival states banked into starts_L{lvl}.json")
+                  f"{added} new arrival states banked into starts/starts_L{lvl}.json")
         else:
             print(f"level {lvl}: no predecessor model, skipping arrival bank")
         # evaluate THIS level's model from its pool (also feeds N+1's pool)
@@ -162,7 +165,7 @@ def reconcile(lo, hi, args):
                "--num-envs", str(args.num_envs), "--rollout", "256",
                "--total-steps", str(args.reconcile_budget),
                "--goal-level", str(lvl + 1),
-               "--start-states", f"starts_L{lvl}.json", "--curriculum",
+               "--start-states", f"starts/starts_L{lvl}.json", "--curriculum",
                "--max-steps", "80",
                "--p-bottom", "0.0", "--cur-target-p-bottom", "0.0",
                "--cur-advance-rate", "0.45", "--cur-window", "20",
@@ -228,7 +231,7 @@ def main():
 
     for lvl in range(lo, hi + 1):
         print(f"\n{'='*66}\n=== LEVEL {lvl}\n{'='*66}", flush=True)
-        starts = f"starts_L{lvl}.json"
+        starts = f"starts/starts_L{lvl}.json"
         save_dir = f"checkpoints/L{lvl}"
 
         if not args.retrain and latest_ckpt(save_dir):
@@ -291,7 +294,7 @@ def main():
                      "--save-dir", save_dir]
         if windy:
             # wind levels: agent sees the wind phase and has atomic
-            # wait-for-wind-then-jump combos; trains against randomized phases
+            # wait-for-wind-then-jump actions; trains against randomized phases
             train_cmd += ["--wind-obs", "--wind-jump", WIND_JUMP]
         rc, out = run(train_cmd, f"logs/L{lvl}_train.log", live=True)
         if rc != 0 or not latest_ckpt(save_dir):

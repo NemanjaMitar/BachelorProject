@@ -12,8 +12,8 @@ macro-actions. This searches that graph breadth-first and answers, with proof:
   * which states are physics traps (king never settles / level seam flicker)?
 
 Usage:
-    python LevelGraph.py --level 9 --starts starts_L9.json --fine-walk-frames 3
-    python LevelGraph.py --level 9 --starts starts_L9.json --fine-walk-frames 3 ^
+    python LevelGraph.py --level 9 --starts starts/starts_L9.json --fine-walk-frames 3
+    python LevelGraph.py --level 9 --starts starts/starts_L9.json --fine-walk-frames 3 ^
         --charges 4,8,12,16,20,22,24,26,32          # test an EXTENDED pool
     python LevelGraph.py --level 9 --seed 375 305   # single seed instead of a file
 
@@ -81,7 +81,7 @@ def main():
                          "left/right).")
     ap.add_argument("--wind-jump", default=None,
                     help="comma list of wind buckets 0..4 to add ATOMIC "
-                         "'wait for bucket B then jump' combos (e.g. 0,4). "
+                         "'wait for bucket B then jump' actions (e.g. 0,4). "
                          "THIS is what lets the search prove wind crossings.")
     ap.add_argument("--no-wind", action="store_true",
                     help="disable the wind force -- makes the search a real "
@@ -92,6 +92,9 @@ def main():
     ap.add_argument("--max-nodes", type=int, default=1500)
     ap.add_argument("--max-paths", type=int, default=5,
                     help="stop after this many distinct goal paths")
+    ap.add_argument("--world", default=None,
+                    help="prove a screen of a custom world (levels/<name>.json) "
+                         "instead of the original game's")
     ap.add_argument("--emit-starts", default=None,
                     help="merge winning-path states into this pool file")
     args = ap.parse_args()
@@ -112,6 +115,9 @@ def main():
     if args.no_wind:
         kw["no_wind"] = True
     env = JumpKingEnv(**kw)
+    if args.world:
+        import CustomWorld
+        CustomWorld.apply_world(env, CustomWorld.load_world(args.world))
     lvl, goal = args.level, args.level + 1
     print(f"level {lvl} -> {goal} | {env.num_actions} actions "
           f"charges={env.charges} fine_walk={args.fine_walk_frames} "

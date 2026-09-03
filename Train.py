@@ -17,7 +17,7 @@ that the whole stack (env macro-step, reward sign, PPO math) is sound.
 Warm-start onto a harder goal (the "staircase"): once level 0 is solved, load
 that checkpoint and bump the goal. Use --reset-opt when switching tasks:
     python train.py --num-envs 8 --rollout 64 --goal-level 2 \
-        --start-states start_states.json --p-bottom 0.5 \
+        --start-states starts/start_states.json --p-bottom 0.5 \
         --resume checkpoints/ppo_XXXX.pt --reset-opt
 """
 
@@ -26,7 +26,7 @@ import time
 import json
 
 def _merge_frontier_to_json(path, states, grid=12):
-    """Merge auto-captured frontier states into start_states.json, in the same
+    """Merge auto-captured frontier states into starts/start_states.json, in the same
     {level_str: [[x, y], ...]} format capture.py writes. ONLY the main training
     process calls this (workers just report states via info), so there is no
     multi-writer race. Dedups by a coarse pixel grid and never drops existing
@@ -63,6 +63,7 @@ import numpy as np
 import torch
 
 from PPO import PPO, RolloutBuffer, get_device
+from Occupancy import resolve_channels
 
 
 def _parse_charges(s):
@@ -142,17 +143,88 @@ def maybe_resume(agent, args, device):
     return step
 
 
-def env_factory(args):
+def _goal_boxes(args):
+    """Ordered (y, x_lo, x_hi) route waypoints from a RouteSearch result."""
+    if not args.route_waypoints:
+        return ()
+    with open(args.route_waypoints, encoding="utf-8") as f:
+        d = json.load(f)
+    return tuple(tuple(int(v) for v in w) for w in d["waypoints"])
+
+
+def _goal_ys(args):
+    """The staircase of subgoal heights for --goal-ys.
+
+    "auto" derives it from the level's own platform tops (every distinct height
+    a king can stand on, above the start), which is what the agent must climb
+    anyway. A comma list overrides it."""
+    if not args.goal_ys:
+        return ()
+    if args.goal_ys != "auto":
+        return tuple(int(v) for v in args.goal_ys.split(","))
+    import os as _os
+    _os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    _os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+    from JK_Env import JumpKingEnv
+    probe = JumpKingEnv(max_steps=10)
+    if args.world:
+        import CustomWorld
+        CustomWorld.apply_world(probe, CustomWorld.load_world(args.world))
+    lvl = args.goal_level - 1 if args.goal_level else 0
+    kh = probe.king.rect_height
+    ys = sorted({int(p.y) - kh for p in (probe.levels.levels[lvl].platforms or [])
+                 if p.width >= 8 and p.height >= 4 and p.y - kh > 0},
+                reverse=True)
+    probe.close()
+    below = [y for y in ys if y < args.goal_y_from] if args.goal_y_from else ys
+    return tuple(below)
+
+
+def apply_world(env, args, worker=0):
+    """Swap the engine's level data for a custom / generated world.
+
+    --world       one hand-built world, fixed for the whole run.
+    --world-pool  a directory of PROVED procedurally generated worlds; a random
+                  one is drawn on every reset, so the agent climbs a screen it
+                  has (almost) never seen. This is the generalization test.
+    --world-gen   the same, but generating on the fly and without the proof --
+                  cheaper, and a few % of the screens are unsolvable.
+
+    Must run AFTER the env exists; Levels.reset() does not undo it."""
+    if getattr(args, "world_pool", None):
+        import WorldGen
+        WorldGen.attach_pool(env, args.world_pool,
+                             seed=args.world_gen_seed + 1000 * worker,
+                             curriculum=not args.world_fixed_curriculum,
+                             cur_target=args.world_cur_target,
+                             cur_window=args.world_cur_window,
+                             mix_below=args.world_mix_below)
+    elif getattr(args, "world_gen", False):
+        import WorldGen
+        WorldGen.attach_generator(env, seed=args.world_gen_seed + 1000 * worker,
+                                  curriculum=not args.world_fixed_curriculum,
+                                  cur_target=args.world_cur_target,
+                                  cur_window=args.world_cur_window,
+                                  mix_below=args.world_mix_below)
+    elif getattr(args, "world", None):
+        import CustomWorld
+        CustomWorld.apply_world(env, CustomWorld.load_world(args.world))
+    return env
+
+
+def env_factory(args, worker=0):
     """Returns a zero-arg callable that builds one env (picklable via cloudpickle)."""
     def _make():
         from JK_Env import JumpKingEnv
-        return JumpKingEnv(
+        env = JumpKingEnv(
             max_steps=args.max_steps,
             goal_level=args.goal_level,
             transition_fail_y=args.transition_fail_y,
             level_reward=args.level_reward,
             level_penalty=args.level_penalty,
+            level_penalty_cap=args.level_penalty_cap,
             altitude_breadcrumb=args.altitude_breadcrumb,
+            step_cost=args.step_cost,
             start_states=args.start_states,   # curriculum checkpoint pool
             p_bottom=args.p_bottom,           # fraction of resets that start at the bottom
             curriculum=args.curriculum,       # reverse easy->hard curriculum
@@ -166,13 +238,20 @@ def env_factory(args):
             extra_charges=_parse_charges(args.extra_charges),
             wait_frames=_parse_charges(args.wait_frames),
             wind_obs=args.wind_obs, vel_obs=args.vel_obs,
+            grid_channels=args.grid_channels,
             wind_jump=_parse_charges(args.wind_jump),
             approach_jump=_parse_approach(args.approach_jump),
             wind_combo=_parse_combo(args.wind_combo),
             quarantine_after=args.quarantine_after,
+            start_vel_jitter=args.start_vel_jitter,
+            goal_ys=_goal_ys(args),
+            goal_boxes=_goal_boxes(args),
+            goal_y_reward=args.goal_y_reward,
+            settle_action=args.settle_action,
             goal_x_min=args.goal_x_min,
             goal_x_max=args.goal_x_max,
         )
+        return apply_world(env, args, worker)
     return _make
 
 
@@ -187,20 +266,30 @@ def smoke(args):
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=args.goal_level,
                       transition_fail_y=args.transition_fail_y,
                       level_reward=args.level_reward, level_penalty=args.level_penalty,
+                      level_penalty_cap=args.level_penalty_cap,
                       altitude_breadcrumb=args.altitude_breadcrumb,
+                      step_cost=args.step_cost,
                       start_states=args.start_states, p_bottom=args.p_bottom,
                       fine_walk_frames=args.fine_walk_frames,
                       extra_charges=_parse_charges(args.extra_charges),
                       wait_frames=_parse_charges(args.wait_frames),
                       wind_obs=args.wind_obs, vel_obs=args.vel_obs,
+                      grid_channels=args.grid_channels,
                       wind_jump=_parse_charges(args.wind_jump),
                       approach_jump=_parse_approach(args.approach_jump),
                       wind_combo=_parse_combo(args.wind_combo),
                       quarantine_after=args.quarantine_after,
+                      start_vel_jitter=args.start_vel_jitter,
+                      goal_ys=_goal_ys(args),
+                      goal_boxes=_goal_boxes(args),
+                      goal_y_reward=args.goal_y_reward,
+                      settle_action=args.settle_action,
                       goal_x_min=args.goal_x_min,
                       goal_x_max=args.goal_x_max)
+    apply_world(env, args)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
-                grid_shape=env.grid_shape, n_scalars=env.n_scalars)
+                grid_shape=env.grid_shape, n_scalars=env.n_scalars,
+                extra_conv=args.extra_conv, scalar_embed=args.scalar_embed)
     maybe_resume(agent, args, device)
     print(f"obs_dim={env.obs_dim} num_actions={env.num_actions} "
           f"params={sum(p.numel() for p in agent.net.parameters())} "
@@ -237,13 +326,14 @@ def train(args):
     device = get_device()
     print("device:", device, "| num_envs:", args.num_envs)
 
-    envs = SubprocVecEnv([env_factory(args) for _ in range(args.num_envs)])
+    envs = SubprocVecEnv([env_factory(args, i) for i in range(args.num_envs)])
     obs_dim, num_actions = envs.obs_dim, envs.num_actions
     agent = PPO(obs_dim, num_actions, device=device,
                 lr=args.lr, gamma=args.gamma, lam=args.lam,
                 clip=args.clip, epochs=args.epochs, minibatches=args.minibatches,
                 ent_coef=args.ent_coef,
-                grid_shape=envs.grid_shape, n_scalars=envs.n_scalars)
+                grid_shape=envs.grid_shape, n_scalars=envs.n_scalars,
+                extra_conv=args.extra_conv, scalar_embed=args.scalar_embed)
 
     os.makedirs(args.save_dir, exist_ok=True)
     obs = envs.reset()
@@ -289,6 +379,18 @@ def train(args):
                 torch.as_tensor(obs, device=device).float())[1]
         logs = agent.update(buf, last_value)
 
+        # ADAPTIVE ENTROPY FLOOR. A curriculum rung that is solved by ONE action
+        # drives the policy deterministic (entropy -> 0); the next rung then
+        # needs a two-action discovery that a collapsed policy can never sample,
+        # so the ladder stalls with kl ~ 0. Push the entropy coefficient up
+        # whenever measured entropy falls under the floor, and relax it back
+        # once exploration recovers.
+        if args.ent_floor > 0.0:
+            if logs["entropy"] < args.ent_floor:
+                agent.ent_coef = min(agent.ent_coef * 1.4, args.ent_coef_max)
+            elif logs["entropy"] > args.ent_floor * 1.6:
+                agent.ent_coef = max(agent.ent_coef / 1.2, args.ent_coef)
+
         if args.auto_frontier and frontier_buffer and update % args.frontier_dump_every == 0:
             added = _merge_frontier_to_json(args.frontier_out, frontier_buffer, grid=12)
             print(f"  frontier: +{added} new start spots -> {args.frontier_out} "
@@ -324,7 +426,11 @@ def train(args):
                             "wind_jump": list(_parse_charges(args.wind_jump)),
                             "approach_jump": [list(a) for a in _parse_approach(args.approach_jump)],
                             "wind_combo": [[list(s) for s in r] for r in _parse_combo(args.wind_combo)],
-                            "wind_obs": args.wind_obs, "vel_obs": args.vel_obs}}
+                            "settle_action": args.settle_action,
+                            "wind_obs": args.wind_obs, "vel_obs": args.vel_obs,
+                            "grid_channels": list(resolve_channels(args.grid_channels)),
+                            "extra_conv": args.extra_conv,
+                            "scalar_embed": args.scalar_embed}}
 
         # Early stop for the automated pipeline: curriculum fully unlocked and
         # recent success high enough -> the level is solved, don't burn budget.
@@ -367,7 +473,9 @@ def train_visible(args):
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=args.goal_level,
                       transition_fail_y=args.transition_fail_y,
                       level_reward=args.level_reward, level_penalty=args.level_penalty,
+                      level_penalty_cap=args.level_penalty_cap,
                       altitude_breadcrumb=args.altitude_breadcrumb,
+                      step_cost=args.step_cost,
                       start_states=args.start_states, p_bottom=args.p_bottom,
                       curriculum=args.curriculum,
                       cur_advance_rate=args.cur_advance_rate,
@@ -380,16 +488,24 @@ def train_visible(args):
                       extra_charges=_parse_charges(args.extra_charges),
                       wait_frames=_parse_charges(args.wait_frames),
                       wind_obs=args.wind_obs, vel_obs=args.vel_obs,
+                      grid_channels=args.grid_channels,
                       wind_jump=_parse_charges(args.wind_jump),
                       approach_jump=_parse_approach(args.approach_jump),
                       wind_combo=_parse_combo(args.wind_combo),
                       quarantine_after=args.quarantine_after,
+                      start_vel_jitter=args.start_vel_jitter,
+                      goal_ys=_goal_ys(args),
+                      goal_boxes=_goal_boxes(args),
+                      goal_y_reward=args.goal_y_reward,
+                      settle_action=args.settle_action,
                       goal_x_min=args.goal_x_min,
                       goal_x_max=args.goal_x_max)
+    apply_world(env, args)
     agent = PPO(env.obs_dim, env.num_actions, device=device,
                 lr=args.lr, gamma=args.gamma, lam=args.lam, clip=args.clip,
                 epochs=args.epochs, minibatches=args.minibatches, ent_coef=args.ent_coef,
-                grid_shape=env.grid_shape, n_scalars=env.n_scalars)
+                grid_shape=env.grid_shape, n_scalars=env.n_scalars,
+                extra_conv=args.extra_conv, scalar_embed=args.scalar_embed)
     global_step = maybe_resume(agent, args, device)
     print(f"checkpoints={len(env._start_pool)} curriculum={env.curriculum}")
 
@@ -458,7 +574,11 @@ def train_visible(args):
                             "wind_jump": list(_parse_charges(args.wind_jump)),
                             "approach_jump": [list(a) for a in _parse_approach(args.approach_jump)],
                             "wind_combo": [[list(s) for s in r] for r in _parse_combo(args.wind_combo)],
-                            "wind_obs": args.wind_obs, "vel_obs": args.vel_obs}},
+                            "settle_action": args.settle_action,
+                            "wind_obs": args.wind_obs, "vel_obs": args.vel_obs,
+                            "grid_channels": list(resolve_channels(args.grid_channels)),
+                            "extra_conv": args.extra_conv,
+                            "scalar_embed": args.scalar_embed}},
                        path)
             print("saved", path)
     env.close()
@@ -471,7 +591,42 @@ def build_argparser():
     p.add_argument("--rollout", type=int, default=256)
     p.add_argument("--total-steps", type=int, default=2_000_000)
     p.add_argument("--max-steps", type=int, default=600, help="env step limit per episode")
-    p.add_argument("--goal-level", type=int, default=1,
+    p.add_argument("--world", type=str, default=None,
+                   help="train on a custom world built with LevelEditor.py "
+                        "(levels/<name>.json) instead of the original game's "
+                        "screens. --goal-level then defaults to its top screen.")
+    p.add_argument("--world-pool", type=str, default=None,
+                   help="directory of PROVED generated worlds (WorldGen.py "
+                        "--out): a random one is drawn every episode, so the "
+                        "policy is trained on screens instead of on ONE screen. "
+                        "Evaluate on a pool built with a disjoint seed.")
+    p.add_argument("--world-gen", action="store_true",
+                   help="generate an unverified random world every episode")
+    p.add_argument("--world-gen-seed", type=int, default=0)
+    p.add_argument("--world-fixed-curriculum", action="store_true",
+                   help="use the old SCHEDULED start curriculum instead of the "
+                        "adaptive one (kept for the ablation: scheduled was "
+                        "measured to stall at 1/120 bottom starts)")
+    p.add_argument("--world-cur-target", type=float, default=0.65,
+                   help="success rate a stage must hold before the generated "
+                        "reverse curriculum drops one rung lower")
+    p.add_argument("--world-mix-below", type=float, default=0.3,
+                   help="fraction of episodes drawn from an EASIER already "
+                        "cleared curriculum stage, so the skill is not "
+                        "forgotten while the deepest stage is learnt")
+    p.add_argument("--world-cur-window", type=int, default=150,
+                   help="episodes per env the stage success is measured over")
+    p.add_argument("--world-anneal-episodes", type=int, default=0,
+                   help="anneal the generated reverse curriculum over this "
+                        "many episodes PER ENV: start on the top rung only, "
+                        "widen downward, end on bottom-only starts. 0 = the "
+                        "fixed --world-start-rung-p mix.")
+    p.add_argument("--world-start-rung-p", type=float, default=0.5,
+                   help="fraction of --world-pool episodes that start on a "
+                        "random rung instead of the floor (the generated "
+                        "screen's own reverse curriculum). Evaluation always "
+                        "starts at the bottom.")
+    p.add_argument("--goal-level", type=int, default=None,
                    help="terminate+reward on reaching this level (curriculum)")
     p.add_argument("--transition-fail-y", type=int, default=None,
                    help="treat a level transition into the goal level with rect_y >= this value as a failed episode")
@@ -482,9 +637,18 @@ def build_argparser():
                         "models), or climb-fall-climb reward farming collapses "
                         "the run; harmless for per-level models (falls "
                         "terminate anyway)")
+    p.add_argument("--level-penalty-cap", type=int, default=None,
+                   help="charge at most N levels per fall (e.g. 1). Without it "
+                        "the cost of failing grows with how far the king "
+                        "tumbles, so climbing raises the downside and the agent "
+                        "learns to fail early instead of going up.")
     p.add_argument("--altitude-breadcrumb", type=float, default=0.0)
+    p.add_argument("--step-cost", type=float, default=0.0,
+                   help="charge this for every action. Needed once falling is "
+                        "capped: otherwise standing still costs nothing and the "
+                        "risk-averse optimum is to idle until truncation.")
     p.add_argument("--start-states", type=str, default=None,
-                   help="path to start_states.json; enables the checkpoint curriculum")
+                   help="path to starts/start_states.json; enables the checkpoint curriculum")
     p.add_argument("--p-bottom", type=float, default=0.2,
                    help="fraction of episode resets that start at the bottom "
                         "instead of a checkpoint (only matters with --start-states)")
@@ -502,7 +666,7 @@ def build_argparser():
     p.add_argument("--frontier-min-level", type=int, default=1,
                    help="only auto-bank states on this level or above (set to the level "
                         "you are currently pushing from to avoid re-banking mastered ones)")
-    p.add_argument("--frontier-out", type=str, default="start_states.json",
+    p.add_argument("--frontier-out", type=str, default="starts/start_states.json",
                    help="file the auto-captured start states are merged into")
     p.add_argument("--frontier-dump-every", type=int, default=25,
                    help="write newly banked frontier states to disk every N updates")
@@ -538,6 +702,16 @@ def build_argparser():
     p.add_argument("--wait-frames", type=str, default="",
                    help="comma list of 'stand still N frames' actions appended "
                         "to the table (wind levels; e.g. 30,60)")
+    p.add_argument("--settle-action", action="store_true",
+                   help="add a standalone 'settle' action (damps momentum to "
+                        "rest). On ice this recovers the whole penalty that "
+                        "sliding arrivals cause. Appended LAST, so old "
+                        "checkpoints keep their action indices.")
+    p.add_argument("--start-vel-jitter", type=float, default=0.0,
+                   help="randomise the momentum curriculum starts begin with "
+                        "(observation units, e.g. 0.3). Teleports place the king "
+                        "at REST, but the relay hands him a SLIDING king -- on "
+                        "ice that is a different state. 0 = old behaviour.")
     p.add_argument("--quarantine-after", type=int, default=150,
                    help="consecutive failures before a solvable-looking start "
                         "state gets benched; raise (e.g. 600) when a state "
@@ -564,6 +738,24 @@ def build_argparser():
                    help="append the king's (vx,vy) velocity to the observation "
                         "so momentum is observable (icy levels 36-38). "
                         "CHANGES obs size: needs a fresh/warm-started model.")
+    p.add_argument("--extra-conv", action="store_true",
+                   help="one more stride-2 conv layer, shrinking the flattened "
+                        "grid feature 1536 -> 384 so the scalars are not "
+                        "drowned by it. CHANGES the network: needs a fresh model.")
+    p.add_argument("--scalar-embed", type=int, default=0,
+                   help="project the observation scalars through a Linear(N) "
+                        "before concatenating them to the grid feature (0 = "
+                        "append them raw, the historical behaviour). With "
+                        "--extra-conv this takes the scalars' share of the "
+                        "trunk input from ~0.4%% to ~14%% -- what makes (vx,vy) "
+                        "actually visible on ice. CHANGES the network.")
+    p.add_argument("--grid-channels", default=None,
+                   help="comma-separated occupancy planes the observation "
+                        "carries, e.g. 'solid,king,hazard' (the default) or "
+                        "'solid,hazard' for the fully-icy levels 36-38 where "
+                        "hazard duplicates solid. CHANGES obs size: needs a "
+                        "fresh model. The choice is stored in the checkpoint, "
+                        "so relays keep serving mixed families.")
     p.add_argument("--stop-at-succ", type=float, default=None,
                    help="stop training early once the curriculum is fully "
                         "unlocked and recent success reaches this rate "
@@ -573,6 +765,32 @@ def build_argparser():
                         "action table (e.g. 22,24,28,30). Old checkpoints "
                         "warm-start via automatic policy-head expansion.")
     p.add_argument("--ent-coef", type=float, default=0.04)
+    p.add_argument("--route-waypoints", type=str, default=None,
+                   help="JSON from RouteSearch: ordered (y, x_lo, x_hi) boxes "
+                        "along a VERIFIED route, each sized to its measured "
+                        "basin. Paid in order, potential-based, and charged "
+                        "back on a fall -- so a step that gains no height "
+                        "(sliding out from under an overhang) still pays.")
+    p.add_argument("--goal-ys", type=str, default=None,
+                   help="WAYPOINTS: 'auto' (every platform height on the "
+                        "level) or a comma list of king rect_y values. Each is "
+                        "paid ONCE per episode the first time it is reached. "
+                        "Height is not route order (routes go up and down), so "
+                        "these are rewards, not staged goals -- the episode "
+                        "still ends only at the level exit or on a fall.")
+    p.add_argument("--goal-y-from", type=int, default=None,
+                   help="ignore staircase steps at or below this y (i.e. keep "
+                        "only platforms ABOVE the entry)")
+    p.add_argument("--goal-y-reward", type=float, default=5.0,
+                   help="paid once per newly reached waypoint height")
+    p.add_argument("--ent-floor", type=float, default=0.0,
+                   help="keep policy entropy above this by raising --ent-coef "
+                        "adaptively (0 = off). A rung solved by a single action "
+                        "collapses the policy to ~0 entropy, which kills the "
+                        "exploration the NEXT rung needs. For a 37-38 action "
+                        "table, 0.8-1.2 keeps a usable spread.")
+    p.add_argument("--ent-coef-max", type=float, default=0.30,
+                   help="ceiling for the adaptive entropy coefficient")
     p.add_argument("--log-every", type=int, default=1)
     p.add_argument("--save-every", type=int, default=50)
     p.add_argument("--save-dir", type=str, default="checkpoints")
@@ -584,6 +802,16 @@ def build_argparser():
 
 if __name__ == "__main__":
     args = build_argparser().parse_args()
+    if args.goal_level is None:
+        if args.world_pool or args.world_gen:
+            args.goal_level = 1          # generated worlds are 2 screens
+        elif args.world:
+            import CustomWorld
+            args.goal_level = len(CustomWorld.load_world(args.world)["levels"]) - 1
+            print(f"world {args.world}: goal-level defaults to its top screen "
+                  f"({args.goal_level})")
+        else:
+            args.goal_level = 1
     if args.smoke:
         smoke(args)
     elif args.render:

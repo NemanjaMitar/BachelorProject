@@ -11,11 +11,11 @@ import os, argparse, glob, json
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 import torch
-from JK_Env import JumpKingEnv, build_action_table
+from JK_Env import JumpKingEnv, build_action_table, obs_selector
 from PPO import ActorCritic, get_device
 
 dev = get_device()
-SKIP = ("bc", "ppobc", "seed", "temp", "backup")
+SKIP = ("seed", "temp", "backup")
 
 
 def latest(level):
@@ -32,21 +32,33 @@ def load(level, goal):
     cfg = ck.get("action_cfg", {})
     ex = tuple(cfg.get("extra_charges", (22, 24, 28, 30)))
     n = ck["model"]["policy_head.weight"].shape[0]
+    # Build the env to the checkpoint's OWN observation spec. The audit used to
+    # hardcode wind_obs=False / n_scalars=4, so it could only ever load plain
+    # models -- a wind or velocity checkpoint failed to load_state_dict.
+    wo, vo = bool(cfg.get("wind_obs")), bool(cfg.get("vel_obs"))
+    chans = cfg.get("grid_channels")          # None = the legacy triple
     e = JumpKingEnv(max_steps=300, goal_level=goal, fine_walk_frames=3,
-                    extra_charges=ex, wind_obs=False)
+                    extra_charges=ex, wind_obs=wo, vel_obs=vo,
+                    vel_encoding=cfg.get("vel_encoding", "xy"),
+                    grid_channels=chans)
     e.actions = build_action_table(fine_walk_frames=3, extra_charges=ex)
     e.num_actions = len(e.actions)
-    net = ActorCritic(e.obs_dim, n, grid_shape=e.grid_shape, n_scalars=4).to(dev)
+    sel = obs_selector(e, chans, wo, vo, os.path.basename(f),
+                       cfg.get("vel_encoding", "xy"))
+    net = ActorCritic(sel.obs_dim, n, grid_shape=sel.grid_shape,
+                      n_scalars=sel.n_scalars,
+                      extra_conv=bool(cfg.get("extra_conv", False)),
+                      scalar_embed=int(cfg.get("scalar_embed", 0))).to(dev)
     net.load_state_dict(ck["model"]); net.eval()
-    return e, net, e._grid_flat + 4, os.path.basename(f)
+    return e, net, sel, os.path.basename(f)
 
 
-def greedy(e, net, nd, lvl, x, y, goal, cap=30):
+def greedy(e, net, sel, lvl, x, y, goal, cap=30):
     obs, _ = e.reset(level=lvl, rect_x=x, rect_y=y)
     seq = [lvl]
     for _ in range(cap):
         with torch.no_grad():
-            a = int(net(torch.as_tensor(obs[:nd], device=dev).float()
+            a = int(net(torch.as_tensor(sel(obs), device=dev).float()
                         .unsqueeze(0))[0].argmax(1).item())
         obs, _, t, tr, info = e.step(a)
         if info["level"] != seq[-1]:
@@ -69,19 +81,19 @@ def main():
         if not prev or not cur:
             print(f"{N:>4} {'-- missing model --':<26}")
             continue
-        ep, npv, ndp, _ = prev
-        starts = (json.load(open(f"starts_L{N-1}.json"))
-                  if os.path.exists(f"starts_L{N-1}.json") else [])
+        ep, npv, selp, _ = prev
+        starts = (json.load(open(f"starts/starts_L{N-1}.json"))
+                  if os.path.exists(f"starts/starts_L{N-1}.json") else [])
         entries = set()
         for s in (starts[:8] or [{"x": 240, "y": 300}]):
-            seq_x = greedy(ep, npv, ndp, N - 1, int(s["x"]), int(s["y"]), N)
+            seq_x = greedy(ep, npv, selp, N - 1, int(s["x"]), int(s["y"]), N)
             if seq_x[-1] >= N:               # actually reached N
                 entries.add((int(ep.king.rect_x), int(ep.king.rect_y)))
         ep.close()
-        e, net, nd, name = cur
+        e, net, sel, name = cur
         bad = []
         for (x, y) in sorted(entries):
-            seq = greedy(e, net, nd, N, x, y, N + 1)
+            seq = greedy(e, net, sel, N, x, y, N + 1)
             if min(seq) < N:
                 bad.append((x, y, "FALL", seq))
             elif seq[-1] < N + 1:

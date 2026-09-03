@@ -24,7 +24,7 @@ Design notes (read these before changing anything):
   can't control charge length. We ALSO expose a couple of pure-walk actions for
   fine horizontal positioning.
 
-* CURRICULUM: if you pass start_states="start_states.json" (a list of captured
+* CURRICULUM: if you pass start_states="starts/start_states.json" (a list of captured
   checkpoints produced by capture.py), reset() will, with probability
   (1 - p_bottom), drop the King at a random captured checkpoint instead of the
   bottom. This is what feeds the agent useful near-the-exit starts. With
@@ -53,7 +53,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 import numpy as np
-from Occupancy import build_occupancy_grid, GRID_CELL
+from Occupancy import build_occupancy_grid, resolve_channels, GRID_CELL
 
 
 # Wind force = sin(wind_var) * WIND_AMPLITUDE (see Wind.calculate_wind).
@@ -105,7 +105,8 @@ def wind_ready(wind_var, target_bucket):
 
 def build_action_table(charges=(4, 8, 12, 16, 20, 26, 32), walk_frames=10,
                        fine_walk_frames=0, extra_charges=(), wait_frames=(),
-                       wait_wind=(), wind_jump=(), approach_jump=(), wind_combo=()):
+                       wait_wind=(), wind_jump=(), approach_jump=(), wind_combo=(),
+                       settle_action=False):
     """THE canonical action-table layout. Any tool that needs to know what a
     model's action index means (e.g. Play's per-model tables) must build the
     table through this function with that model's OWN action config --
@@ -151,12 +152,20 @@ def build_action_table(charges=(4, 8, 12, 16, 20, 26, 32), walk_frames=10,
     # Encoded as ("approach_jump", (target_x, bucket, direction), charge).
     for (tx, b, d, c) in (approach_jump or ()):
         actions.append(("approach_jump", (int(tx), int(b), d), int(c)))
-    # ATOMIC multi-step wind route: a whole short windy level's proven sequence
-    # of wind-jumps executed as ONE action (settling between steps). This makes
+    # ATOMIC multi-step wind route: a proven sequence of wind-jumps executed as
+    # ONE action (settling between steps). This makes
     # the entire level a single decision at the entry, so no intermediate state
     # -- which the 8px conv grid often can't tell apart from its neighbour -- is
     # ever a decision point. Each combo is a tuple of (bucket, direction, charge)
     # steps. Encoded as ("wind_combo", combo_index, steps_tuple).
+    # STANDALONE SETTLE: let the policy choose to kill its own momentum before
+    # committing to a jump. On ice a grounded king keeps sliding, and a jump
+    # launched mid-slide lands somewhere else -- measured: success drops from
+    # 0.51 to 0.11 purely from arrival momentum, and is fully recovered by
+    # settling first. A multi-step route opens with a settle for the same
+    # reason; this exposes the primitive as an action the agent can learn.
+    if settle_action:
+        actions.append(("settle", "none", 0))
     for i, steps in enumerate(wind_combo or ()):
         enc = []
         for s in steps:
@@ -171,6 +180,84 @@ def build_action_table(charges=(4, 8, 12, 16, 20, 26, 32), walk_frames=10,
                 enc.append((int(b), d, int(c)))
         actions.append(("wind_combo", int(i), tuple(enc)))
     return actions
+
+
+# Distance over which the dense route term decays to zero, in pixels. A leg of
+# the demonstrated route is rarely longer than this, so the term is informative
+# along the whole leg instead of saturating.
+ROUTE_DENSE_SCALE = 220.0
+
+STARTS_DIR = "starts"          # every start-state pool lives in this folder
+
+
+def resolve_start_states(path):
+    """Accept both 'starts/starts_L12.json' and the older bare 'starts_L12.json'.
+
+    The pools moved into starts/ after the 0->42 run; older commands (and the
+    ones quoted in the logs) still name them without the folder."""
+    if not path or os.path.exists(path):
+        return path
+    cand = os.path.join(STARTS_DIR, os.path.basename(path))
+    return cand if os.path.exists(cand) else path
+
+
+def obs_selector(env, channels=None, wind_obs=False, vel_obs=False, who="model",
+                 vel_encoding=None):
+    """Return f(obs) narrowing the env's observation to what ONE model expects.
+
+    A relay drives many models with a single env, so the env is built as the
+    SUPERSET -- the widest grid channel set and the widest scalar vector -- and
+    each model takes only its own planes and its own scalar columns. This is the
+    one place that knows the packing order: grid (C*H*W) first, then the scalars
+    [x, y, level, altitude] (+ wind sin/cos if the env has wind) (+ vx, vy if
+    the env has velocity).
+
+    A model whose channel list equals the env's takes the identity path -- no
+    reshape, no copy -- which is what every checkpoint from the 0->42 run does.
+
+    The returned function carries .obs_dim, .n_scalars and .grid_shape so a
+    loader can build the matching network without recomputing the packing."""
+    channels = resolve_channels(channels)
+    missing = [c for c in channels if c not in env.grid_channels]
+    if missing:
+        raise ValueError(f"{who}: needs grid channel(s) {missing}; this env "
+                         f"produces {list(env.grid_channels)}")
+    if wind_obs and not env.wind_obs:
+        raise ValueError(f"{who}: trained with wind scalars; this env has none")
+    if vel_obs and not env.vel_obs:
+        raise ValueError(f"{who}: trained with velocity scalars; this env has none")
+    venc = vel_encoding or "xy"
+    if vel_obs and env.vel_encoding != "both" and venc != env.vel_encoding:
+        raise ValueError(f"{who}: trained with vel_encoding={venc!r} but this env "
+                         f"reports {env.vel_encoding!r}; build the env with "
+                         f"vel_encoding='both' to serve both families at once")
+
+    _, H, W = env.grid_shape
+    gf = env._grid_flat
+    idx = [env.grid_channels.index(c) for c in channels]
+    same = tuple(channels) == tuple(env.grid_channels)
+    src_c = len(env.grid_channels)
+
+    cols = [0, 1, 2, 3]
+    if wind_obs:
+        cols += [4, 5]
+    if vel_obs:                       # velocity sits AFTER wind when both exist
+        base = 6 if env.wind_obs else 4
+        if env.vel_encoding == "both":
+            # env emits [vx, vy, |v|, dir_x, dir_y]; take this model's slice
+            cols += (list(range(base, base + 2)) if venc == "xy"
+                     else list(range(base + 2, base + 5)))
+        else:
+            cols += list(range(base, base + env._n_vel))
+
+    def select(obs):
+        grid = obs[:gf] if same else obs[:gf].reshape(src_c, H, W)[idx].ravel()
+        return np.concatenate([grid, obs[gf:][cols]]).astype(np.float32)
+
+    select.grid_shape = (len(channels), H, W)
+    select.n_scalars = len(cols)
+    select.obs_dim = len(channels) * H * W + len(cols)
+    return select
 
 
 class JumpKingEnv:
@@ -220,6 +307,12 @@ class JumpKingEnv:
                                        # windy level's proven sequence as one
                                        # action so intermediate (perceptually
                                        # ambiguous) states are never decisions.
+                 settle_action=False,  # add a standalone "settle" action that
+                                       # damps the king's momentum to rest. On
+                                       # ice this is what lets a policy trained
+                                       # on at-rest states cope with sliding
+                                       # arrivals. Appended LAST, so old
+                                       # checkpoints keep their indices.
                  wind_obs=False,       # append sin/cos of the wind phase to the
                                        # observation scalars (4 -> 6) AND
                                        # randomize the phase at every teleport
@@ -230,6 +323,68 @@ class JumpKingEnv:
                                        # position alone aliases momentum states;
                                        # velocity makes them distinguishable ->
                                        # lets PPO genuinely learn icy levels.
+                 vel_encoding="xy",    # how vel_obs reports motion.
+                                       # "xy": (vx, vy) -- the historical pair,
+                                       # what every existing checkpoint expects.
+                                       # "polar": (|v|, dir_x, dir_y) -- HOW MUCH
+                                       # momentum, separately from WHICH WAY.
+                                       # Measured on the demo decision points:
+                                       # the king is almost never sliding along
+                                       # x, he is sliding DOWN A RAMP (|vy|/|v|
+                                       # is 0.6-1.0 at most of them, and 1.00 at
+                                       # L37 k=9), so direction needs both
+                                       # components -- but magnitude is what the
+                                       # charge-time drift scales with, and a
+                                       # product of the two is a poor thing to
+                                       # ask a small MLP to disentangle.
+                 fail_penalty=0.0,     # UNIFORM cost for ending an episode
+                                       # without reaching the goal, however it
+                                       # ended. Without it the ways of failing
+                                       # are priced wildly differently -- a fall
+                                       # costs the level penalty PLUS the whole
+                                       # accumulated route potential (measured
+                                       # -40 on L38) while standing around until
+                                       # the time limit costs 0 -- so the risk-
+                                       # adjusted best move is to do nothing,
+                                       # and a from-scratch policy correctly
+                                       # learns exactly that (measured: it put
+                                       # p=1e-4 on the only two actions that
+                                       # cross, and 0.46 on a tiny safe walk).
+                                       # Charging every failure the same F makes
+                                       # exploring beat failing safely whenever
+                                       # F < the crossing reward. Setting it also
+                                       # stops the route potential resetting on a
+                                       # fall, so the cost is not counted twice.
+                 route_dense=0.0,      # DENSE route shaping. The default
+                                       # potential only moves when the king
+                                       # lands INSIDE the next waypoint box, so
+                                       # a policy with no prior earns nothing at
+                                       # all and has no gradient to follow. With
+                                       # this > 0 the potential also credits how
+                                       # far along the leg he is, scaled by this
+                                       # weight -- still potential-based, so no
+                                       # cycle can be farmed.
+                 stuck_limit=0,        # end the episode after this many
+                                       # CONSECUTIVE actions that leave the
+                                       # king in the same place. On the icy
+                                       # levels he can wedge (measured on L36:
+                                       # x pinned at 294.9, y at 80, where every
+                                       # jump, walk and settle moves him zero
+                                       # pixels) -- move_available() stays True
+                                       # so the physics-trap guard never fires,
+                                       # and the episode burns its whole budget
+                                       # earning exactly nothing. 0 = off, which
+                                       # is what every existing model was
+                                       # trained and is replayed with.
+                 grid_channels=None,   # which occupancy planes the observation
+                                       # carries. None = the historical
+                                       # ("solid","king","hazard") triple that
+                                       # every existing checkpoint expects. A
+                                       # level family whose planes are redundant
+                                       # (L36-38 are 100% ice, so hazard is an
+                                       # exact copy of solid) can be trained on
+                                       # a subset -- the checkpoint records it,
+                                       # so relays stay index-compatible.
                  no_wind=False,        # DISABLE the wind force entirely (levels
                                        # 25-31 become deterministic). One switch,
                                        # no geometry changes. Use with wind_obs
@@ -243,6 +398,39 @@ class JumpKingEnv:
                                        # spot the NEXT level can actually work
                                        # with. Outside the region the episode
                                        # continues (he can still walk/jump in).
+                 start_vel_jitter=0.0, # randomise the momentum a curriculum
+                                       # start begins with (in observation
+                                       # units, |v| <= this). A teleport places
+                                       # the king at REST, but in a real climb
+                                       # he ARRIVES sliding -- decisive on ice.
+                                       # Jitter makes the policy robust to the
+                                       # arrival momentum instead of over-
+                                       # fitting the at-rest state. Ignored for
+                                       # states that carry their own vx/vy.
+                 goal_boxes=(),        # ROUTE waypoints: ordered boxes
+                                       # (y, x_lo, x_hi) taken from a VERIFIED
+                                       # route, each sized to its measured
+                                       # basin -- the x window from which the
+                                       # rest of the route still works. On ice
+                                       # that window can be ~13px, so a height-
+                                       # only waypoint is useless: the same
+                                       # ledge reached 20px off is a dead end.
+                                       # Progress is counted IN ORDER, so a step
+                                       # that gains no height (walking out from
+                                       # under an overhang) still pays.
+                 goal_ys=(),           # WAYPOINT rewards: platform heights
+                                       # (king rect_y). The first time in an
+                                       # episode the king lands grounded at or
+                                       # above each height he is paid once.
+                                       # The episode is NOT cut short there --
+                                       # a route on these screens goes up AND
+                                       # down, so height is not route order, and
+                                       # ending at a height would teach nothing
+                                       # about whether that landing can be
+                                       # continued from. Starts stay real (no
+                                       # teleport), so momentum is whatever the
+                                       # agent itself produced.
+                 goal_y_reward=5.0,    # paid per newly reached waypoint
                  quarantine_after=150, # consecutive failures (with easier peers
                                        # mastered) before a start state's sample
                                        # weight collapses. Raise it (e.g. 600)
@@ -258,8 +446,26 @@ class JumpKingEnv:
                                               # the episode as a failure
                  level_reward=10.0,            # reward per level climbed (the objective)
                  level_penalty=10.0,           # penalty per level fallen (magnitude)
+                 level_penalty_cap=None,       # charge at most this many levels
+                                               # per fall. Without it the cost of
+                                               # failing grows with how far you
+                                               # tumble, so standing HIGHER is
+                                               # strictly more dangerous and the
+                                               # agent learns to fail early
+                                               # instead of climbing. Measured on
+                                               # level 36: -20.6 average from the
+                                               # entry vs -29.4 one jump higher.
+                                               # None = original behaviour.
+                 step_cost=0.0,                # charged for EVERY action. Without
+                                               # it, idling is free: once falling
+                                               # is the only thing that costs
+                                               # anything, the safest policy is to
+                                               # shuffle in place until the step
+                                               # limit -- measured: 76 of 80
+                                               # episodes ran to truncation with
+                                               # zero route progress.
                  altitude_breadcrumb=0.01,     # weak within-level gradient toward the exit
-                 start_states=None,            # path to start_states.json (curriculum), or None
+                 start_states=None,            # path to starts/start_states.json (curriculum), or None
                  p_bottom=0.0,                 # prob of resetting to the bottom anyway
                  curriculum=False,             # enable the reverse (easy->hard) curriculum
                  cur_window=30,                # episodes per success-rate evaluation
@@ -284,8 +490,20 @@ class JumpKingEnv:
         self.approach_jump = tuple(tuple(a) for a in (approach_jump or ()))
         self.wind_combo = tuple(tuple(tuple(s) for s in r)
                                 for r in (wind_combo or ()))
+        self.settle_action = bool(settle_action)
         self.wind_obs = bool(wind_obs)
         self.vel_obs = bool(vel_obs)
+        # validated ONCE here; the hot path (build_occupancy_grid) trusts it
+        self.grid_channels = resolve_channels(grid_channels)
+        if vel_encoding not in ("xy", "polar", "both"):
+            raise ValueError("vel_encoding must be 'xy', 'polar' or 'both', "
+                             f"got {vel_encoding!r}")
+        self.vel_encoding = vel_encoding
+        self.route_dense = float(route_dense)
+        self.fail_penalty = float(fail_penalty)
+        self.stuck_limit = int(stuck_limit)
+        self._stuck_at = None
+        self._stuck_n = 0
         self.no_wind = bool(no_wind)
         self.goal_x_min = goal_x_min
         self.goal_x_max = goal_x_max
@@ -296,9 +514,20 @@ class JumpKingEnv:
                                   else int(transition_fail_y))
         self.level_reward = float(level_reward)
         self.level_penalty = float(level_penalty)
+        self.level_penalty_cap = (None if level_penalty_cap is None
+                                  else int(level_penalty_cap))
+        self.step_cost = float(step_cost)
         self.altitude_breadcrumb = float(altitude_breadcrumb)
         self.p_bottom = float(p_bottom)
         self.terminate_on_fall_below_start = bool(terminate_on_fall_below_start)
+        self.start_vel_jitter = float(start_vel_jitter)
+        self.goal_boxes = tuple((int(y), int(xl), int(xh))
+                                for (y, xl, xh) in (goal_boxes or ()))
+        self._route_i = -1                   # last route waypoint passed
+        # waypoints, highest y (lowest on screen) first
+        self.goal_ys = tuple(sorted((int(y) for y in (goal_ys or ())), reverse=True))
+        self.goal_y_reward = float(goal_y_reward)
+        self._gy_phi = -1                    # current waypoint index (potential)
         self.rng = np.random.default_rng(seed)
 
         # Curriculum checkpoint pool (list of dicts). Empty list => bottom-only.
@@ -389,7 +618,12 @@ class JumpKingEnv:
         # returns 0 for any key we didn't press.
         from collections import defaultdict
         self._keys = defaultdict(int)
-        pygame.key.get_pressed = lambda: self._keys
+        # NOTE: this is a GLOBAL. Constructing a second env in the same process
+        # would rebind it to that env's dict and leave this one permanently
+        # unable to press a key -- the king would drift but never charge or
+        # jump. _bind_keys() re-claims it every physics frame, which is what
+        # makes several envs in one process behave independently.
+        self._bind_keys()
 
         # ---- vision observation: occupancy grid (flattened) + scalars ------
         # We PACK grid+scalars into one flat vector so VecEnv/RolloutBuffer/the
@@ -397,9 +631,11 @@ class JumpKingEnv:
         self.grid_cell = GRID_CELL
         self.grid_h = self.screen_h // self.grid_cell
         self.grid_w = self.screen_w // self.grid_cell
-        self.grid_shape = (3, self.grid_h, self.grid_w)
-        self.n_scalars = 4 + (2 if self.wind_obs else 0) + (2 if self.vel_obs else 0)
-        self._grid_flat = 3 * self.grid_h * self.grid_w
+        self.grid_shape = (len(self.grid_channels), self.grid_h, self.grid_w)
+        self._n_vel = (0 if not self.vel_obs else
+                       {"xy": 2, "polar": 3, "both": 5}[self.vel_encoding])
+        self.n_scalars = 4 + (2 if self.wind_obs else 0) + self._n_vel
+        self._grid_flat = len(self.grid_channels) * self.grid_h * self.grid_w
         self.obs_dim = self._grid_flat + self.n_scalars
         self.num_actions = len(self.actions)
 
@@ -408,6 +644,7 @@ class JumpKingEnv:
         self._episode_start_level = 0
         self._best_alt = 0.0
         self._episode_return = 0.0
+        self._route_frac = 0.0
 
     # ------------------------------------------------------------------ setup
     def _build_action_table(self):
@@ -419,7 +656,8 @@ class JumpKingEnv:
                                           self.wait_wind,
                                           self.wind_jump,
                                           self.approach_jump,
-                                          self.wind_combo)
+                                          self.wind_combo,
+                                          self.settle_action)
 
     # ------------------------------------------------------------- curriculum
     def _load_start_states(self, path):
@@ -433,6 +671,7 @@ class JumpKingEnv:
         starts instead of crashing a training run."""
         if not path:
             return []
+        path = resolve_start_states(path)
         try:
             with open(path, "r") as f:
                 data = json.load(f)
@@ -570,6 +809,12 @@ class JumpKingEnv:
                                          self._cur_p_bottom + 0.1)
             self._succ = []                               # fresh window for the new stage
 
+    def goal_y_status(self):
+        if not self.goal_ys:
+            return None
+        return {"at": self._gy_phi + 1, "of": len(self.goal_ys),
+                "y": (self.goal_ys[self._gy_phi] if self._gy_phi >= 0 else None)}
+
     def curriculum_status(self):
         rate = (sum(self._succ) / len(self._succ)) if self._succ else float("nan")
         status = {"unlocked": self._unlocked,
@@ -602,10 +847,22 @@ class JumpKingEnv:
         self._keys[pygame.K_RIGHT] = 1 if right else 0
 
     # --------------------------------------------------------- physics driver
+    def _bind_keys(self):
+        """Point pygame.key.get_pressed() at THIS env's fake keyboard.
+
+        pygame.key.get_pressed is process-global, so with N envs alive only the
+        one that patched it last could actually press a key; every other env
+        silently read an empty keyboard. Measured on L38: the same snapshot and
+        the same action crossed the level in the last-built env (+21.12) and did
+        nothing at all in the others, which is why in-process vectorised
+        training learned from mostly dead rollouts."""
+        pygame.key.get_pressed = lambda: self._keys
+
     def _physics_frame(self):
         """Advance the game one logic frame. Skips all cosmetic systems
         (audio/npc/flyer/readable/name/hiddenwall) for speed, but keeps wind,
         because wind perturbs the King's physics on windy levels."""
+        self._bind_keys()          # several envs may share this process
         if not self.no_wind:
             self.levels.update_wind(self.king)         # physics-affecting
         prev_level = self.levels.current_level
@@ -704,7 +961,7 @@ class JumpKingEnv:
             # canonicalize the AT-REST state to match a fresh teleport: a king
             # that just crossed levels can be grounded+stopped but keep a stale
             # facing angle (e.g. 3.8 vs the resting pi/2), which changes the very
-            # next jump. Reset it so a combo's jumps reproduce their searched path.
+            # next jump. Reset it so a multi-step route reproduces its own path.
             if not self.king.isFalling and not self.king.isJump:
                 self.king.speed = 0.0
                 self.king.angle = math.pi / 2
@@ -776,6 +1033,10 @@ class JumpKingEnv:
                     f += 1
                 if self.levels.ending:
                     break
+        elif kind == "settle":
+            # stand still until friction has damped the slide to a canonical
+            # at-rest state (the same routine the ice combos use internally)
+            _kill_momentum()
         elif kind == "wait":
             # Stand still and let the world (the wind phase) move on.
             self._set_keys()
@@ -806,6 +1067,29 @@ class JumpKingEnv:
         return self.move_available() or self.levels.ending
 
     # ------------------------------------------------------------------ state
+    def _route_frac_now(self, level, route_i):
+        """How far along the current route leg the king is, in [0, 1].
+
+        Potential-based shaping only works if the potential is evaluated at the
+        START state too. Initialising it to 0 instead handed every episode a
+        free jump in potential on its first step -- measured as a flat +5 that
+        the agent collected no matter what it did."""
+        if not self.goal_boxes or self.route_dense <= 0.0:
+            return 0.0
+        if level > self._episode_start_level:
+            return 1.0
+        if level < self._episode_start_level:
+            # with a uniform failure penalty the shaping must not punish a fall
+            # as well, or the two costs stack and exploring goes negative-value
+            return self._route_frac if self.fail_penalty > 0.0 else 0.0
+        j = route_i + 1
+        if j >= len(self.goal_boxes):
+            return 1.0
+        gy, xl, xh = self.goal_boxes[j]
+        gx = 0.5 * (xl + xh)
+        d = math.hypot(self.king.rect_x - gx, self.king.rect_y - gy)
+        return max(0.0, 1.0 - d / ROUTE_DENSE_SCALE)
+
     def _altitude(self):
         """Monotonic 'how high have we climbed', in pixels. Higher = better.
         Each level up is +screen_h; within a screen, smaller rect_y = higher."""
@@ -822,7 +1106,8 @@ class JumpKingEnv:
             platforms = []
         grid = build_occupancy_grid(platforms,
                                     self.king.rect_x, self.king.rect_y,
-                                    self.screen_w, self.screen_h, self.grid_cell)
+                                    self.screen_w, self.screen_h, self.grid_cell,
+                                    self.grid_channels)
         vals = [
             self.king.rect_x / self.screen_w,
             self.king.rect_y / self.screen_h,
@@ -839,12 +1124,20 @@ class JumpKingEnv:
             # sin(a)*speed, rect_y -= cos(a)*speed), normalized by maxSpeed=11.
             # ~0 at rest / on non-ice; nonzero mid-slide on ice -> momentum state.
             s, a = float(self.king.speed), float(self.king.angle)
-            vals += [math.sin(a) * s / 11.0, -math.cos(a) * s / 11.0]
+            vx, vy = math.sin(a) * s / 11.0, -math.cos(a) * s / 11.0
+            if self.vel_encoding in ("xy", "both"):
+                vals += [vx, vy]
+            if self.vel_encoding in ("polar", "both"):
+                mag = math.hypot(vx, vy)
+                if mag > 1e-9:
+                    vals += [mag, vx / mag, vy / mag]
+                else:
+                    vals += [0.0, 0.0, 0.0]      # at rest: no direction to report
         scalars = np.array(vals, dtype=np.float32)
         return np.concatenate([grid.ravel(), scalars]).astype(np.float32)
 
     # ---------------------------------------------------------------- teleport
-    def teleport(self, level, x=None, y=None):
+    def teleport(self, level, x=None, y=None, vx=None, vy=None):
         """THE canonical way to place the King anywhere. Everything that moves
         him (reset, the validator, the prober, future explorers) must go
         through here, so grounding behaves identically everywhere.
@@ -891,16 +1184,128 @@ class JumpKingEnv:
         # phases, so training must cover them all.
         if self.wind_obs:
             self.levels.wind.wind_var = float(self.rng.uniform(0.0, 2.0 * math.pi))
+
+        # Optional ARRIVAL MOMENTUM. A reverse-curriculum start normally drops
+        # the king at REST, but in a real climb he arrives sliding -- and on ice
+        # a grounded king keeps moving, so "at rest" is a state the relay almost
+        # never hands the policy. Applying the velocity AFTER the settle keeps
+        # the landing spot deterministic while making the STATE realistic.
+        if vx is not None or vy is not None:
+            self.set_velocity(float(vx or 0.0), float(vy or 0.0))
         return (self.levels.current_level,
                 int(self.king.rect_x), int(self.king.rect_y))
 
+    def set_velocity(self, vx, vy):
+        """Give the grounded king momentum, in the SAME normalised units the
+        observation reports (fractions of King.maxSpeed = 11).
+
+        The engine stores motion as (speed, angle) with
+            rect_x += sin(angle) * speed ;  rect_y -= cos(angle) * speed
+        so vx = sin(a)*s/11 and vy = -cos(a)*s/11 invert to the below."""
+        speed = math.hypot(float(vx), float(vy)) * 11.0
+        self.king.speed = speed
+        if speed > 0.0:
+            self.king.angle = math.atan2(float(vx), -float(vy))
+
+    def velocity(self):
+        """The king's current (vx, vy) in observation units."""
+        s, a = float(self.king.speed), float(self.king.angle)
+        return math.sin(a) * s / 11.0, -math.cos(a) * s / 11.0
+
     # ------------------------------------------------------------------- gym
-    def reset(self, level=None, rect_x=None, rect_y=None):
+    # ---------------------------------------------------------------- snapshot
+    # Attributes of King that are NOT physics state: surfaces, sprite tables,
+    # back-references. Everything else that is a plain number/bool/string IS
+    # state and gets captured automatically, so a field added to King later is
+    # picked up without touching this list.
+    _KING_SKIP = ("screen", "sprites", "levels", "timer", "current_image",
+                  "walkAngles", "jumpAngles", "lastCollision")
+
+    def snapshot(self):
+        """Capture the COMPLETE physics state as a JSON-able dict.
+
+        teleport() cannot express every state: it resets the king, places him,
+        settles him to rest and only then injects a velocity, so the flags a
+        real arrival produced (isJump, collideBottom, slope, slip, the mid-slide
+        phase) are lost. On non-ice that does not matter -- slip==0 makes every
+        grounded state converge to the same rest point -- but on ice the state
+        IS (position, velocity, phase), so a reverse curriculum built from
+        teleport samples trains on states the game never actually produces.
+
+        snapshot/restore is the way out: capture what really happened, replay it
+        exactly. This is the mechanism Go-Explore calls returning to a cell by
+        restoring the simulator state rather than reconstructing the position."""
+        k = self.king
+        st = {a: v for a, v in vars(k).items()
+              if a not in self._KING_SKIP
+              and isinstance(v, (int, float, bool, str, type(None)))}
+        # lastCollision is a Platform object; store WHICH platform of the
+        # current level it is, so restore can rebind it to the live object.
+        lc = getattr(k, "lastCollision", None)
+        st["lastCollision_i"] = -1
+        if lc is not None:
+            try:
+                plats = self.levels.levels[self.levels.current_level].platforms or []
+                st["lastCollision_i"] = list(plats).index(lc)
+            except (ValueError, KeyError, AttributeError, IndexError):
+                st["lastCollision_i"] = -1
+        return {"v": 1,
+                "king": st,
+                "level": int(self.levels.current_level),
+                "ending": bool(self.levels.ending),
+                "wind_var": float(self.levels.wind.wind_var)}
+
+    def restore(self, snap, route_i=-1):
+        """Put the king back into exactly the state snapshot() captured.
+
+        Returns the observation, like reset(). Episode bookkeeping is anchored
+        on the restored level, so the fall rule and the altitude breadcrumb
+        behave as if the episode had started here.
+
+        `route_i` is how far along goal_boxes this state already is; the route
+        shaping then looks for waypoint route_i+1 next. It matters when a
+        backward curriculum restores a state from the MIDDLE of a route: with
+        the default -1 the env would wait for waypoint 0, which the king already
+        passed, so every step of a mid-route episode would earn nothing."""
+        if not isinstance(snap, dict) or "king" not in snap:
+            raise ValueError("restore() expects a dict from snapshot()")
+        k = self.king
+        lc_i = snap["king"].get("lastCollision_i", -1)
+        for a, v in snap["king"].items():
+            if a == "lastCollision_i":
+                continue
+            setattr(k, a, v)
+        self.levels.current_level = int(snap["level"])
+        self.levels.ending = bool(snap.get("ending", False))
+        self.levels.wind.wind_var = float(snap.get("wind_var", 0.0))
+        k.lastCollision = None
+        if lc_i >= 0:
+            try:
+                plats = self.levels.levels[self.levels.current_level].platforms or []
+                k.lastCollision = list(plats)[lc_i]
+            except (IndexError, KeyError, AttributeError):
+                k.lastCollision = None
+        self._set_keys()                       # no key may be left held down
+
+        self._steps = 0
+        self._episode_return = 0.0
+        self._prev_level = self.levels.current_level
+        self._episode_start_level = self.levels.current_level
+        self._best_alt = self._altitude()
+        self._gy_phi = -1
+        self._route_i = int(route_i)
+        self._route_frac = self._route_frac_now(self.levels.current_level,
+                                                self._route_i)
+        self._episode_is_curric = False
+        self._stuck_at, self._stuck_n = None, 0
+        return self._obs(), {}
+
+    def reset(self, level=None, rect_x=None, rect_y=None, vx=None, vy=None):
         """Reset to a curriculum checkpoint (default) or to an explicit start.
 
         Calling reset() with no args enables the curriculum: with probability
         (1 - p_bottom) we drop the King at a random captured checkpoint from
-        start_states.json; otherwise (or if the pool is empty) we reset to the
+        starts/start_states.json; otherwise (or if the pool is empty) we reset to the
         bottom. Passing any of level/rect_x/rect_y explicitly bypasses the
         curriculum and forces that exact start (back-compatible with old code).
 
@@ -914,13 +1319,23 @@ class JumpKingEnv:
                 level = self._state_field(s, "level", "current_level", default=0)
                 rect_x = self._state_field(s, "x", "rect_x")
                 rect_y = self._state_field(s, "y", "rect_y")
+                # start states may carry the momentum the king really arrives
+                # with; absent -> at rest, exactly as before
+                if vx is None:
+                    vx = self._state_field(s, "vx")
+                if vy is None:
+                    vy = self._state_field(s, "vy")
+                if vx is None and vy is None and self.start_vel_jitter > 0.0:
+                    j = self.start_vel_jitter
+                    vx = float(self.rng.uniform(-j, j))
+                    vy = float(self.rng.uniform(-j, j))
         else:
             self._episode_is_curric = False
 
         if level is None:
             level = 0
 
-        settled_level, _, _ = self.teleport(level, rect_x, rect_y)
+        settled_level, _, _ = self.teleport(level, rect_x, rect_y, vx, vy)
 
         self._steps = 0
         self._episode_return = 0.0
@@ -930,6 +1345,10 @@ class JumpKingEnv:
         self._prev_level = settled_level
         self._episode_start_level = settled_level    # anchor for the fall rule
         self._best_alt = self._altitude()            # best height reached this episode
+        self._gy_phi = -1                            # below every waypoint
+        self._route_i = -1                           # no route waypoint passed
+        self._route_frac = self._route_frac_now(settled_level, -1)
+        self._stuck_at, self._stuck_n = None, 0
         return self._obs(), {}
 
     def step(self, action_idx, render_cb=None):
@@ -945,13 +1364,16 @@ class JumpKingEnv:
         # breadcrumb keeps a gradient alive *within* a level so the agent has
         # some signal pointing toward the exit. Re-treading height and falling
         # both earn ZERO from the breadcrumb -> no hop-in-place optimum.
-        reward = 0.0
+        reward = -self.step_cost          # time is not free
 
         d_level = level - self._prev_level
         if d_level > 0:
             reward += self.level_reward * d_level          # climbed one or more screens
         elif d_level < 0:
-            reward += self.level_penalty * d_level         # fell back down (negative)
+            n = -d_level
+            if self.level_penalty_cap is not None:
+                n = min(n, self.level_penalty_cap)
+            reward -= self.level_penalty * n               # fell back down
         self._prev_level = level
 
         if alt > self._best_alt:
@@ -986,6 +1408,55 @@ class JumpKingEnv:
                 # outside the delivery region: no success yet -- the episode
                 # continues so the king can still move into the region.
 
+        # WAYPOINT SHAPING, potential-based (Ng et al. 1999): pay the CHANGE in
+        # how many platform heights the king is above, not a one-off bounty for
+        # each. Paying once per new height makes FAILING profitable -- collect
+        # +5 four times, fall one level for -10, and a doomed episode still nets
+        # +10, which is exactly what the agent learned to farm. With a
+        # difference, climbing pays and dropping back charges the same amount
+        # again, so no cycle and no failure can be milked; only real progress
+        # that is KEPT survives to the end of the episode.
+        # ROUTE PROGRESS, potential-based and IN ORDER. Only the next waypoint
+        # counts, so the agent cannot collect a later box by luck, and a step
+        # that gains no height still pays if it is the one the route needs.
+        if self.goal_boxes:
+            if level < self._episode_start_level and self.fail_penalty <= 0.0:
+                phi_r = -1                       # fell off the route: charge it back
+            elif level > self._episode_start_level:
+                # LEFT THE LEVEL UPWARD -- the route is what leads here, so it is
+                # complete, not abandoned. Resetting the potential to -1 here
+                # made the potential difference pay back every waypoint on the
+                # very step that succeeds: measured -8*goal_y_reward against a
+                # +level_reward, i.e. the agent was PUNISHED for crossing.
+                phi_r = len(self.goal_boxes) - 1
+            else:
+                phi_r = self._route_i
+                if phi_r + 1 < len(self.goal_boxes) and self.move_available():
+                    gy, xl, xh = self.goal_boxes[phi_r + 1]
+                    if (abs(self.king.rect_y - gy) <= 6
+                            and xl <= self.king.rect_x <= xh):
+                        phi_r += 1
+            # DENSE within-leg term. Without it the potential only moves when
+            # the king lands inside the next waypoint box, which a policy with
+            # no prior essentially never does -- so it sees a flat reward and
+            # has nothing to follow. frac is how far along the current leg he
+            # is, so the full potential is goal_y_reward*route_i + w*frac and a
+            # step that merely gets CLOSER already pays.
+            frac = self._route_frac_now(level, phi_r)
+            reward += self.goal_y_reward * (phi_r - self._route_i)
+            reward += self.route_dense * (frac - self._route_frac)
+            self._route_i = phi_r
+            self._route_frac = frac
+
+        if self.goal_ys:
+            phi = -1
+            if level == self._episode_start_level and self.move_available():
+                for i, gy in enumerate(self.goal_ys):
+                    if self.king.rect_y <= gy:
+                        phi = i
+            reward += self.goal_y_reward * (phi - self._gy_phi)
+            self._gy_phi = phi
+
         # Fall rule: dropped below the level this attempt started on -> the
         # attempt is over. End it as a FAILURE (reached_goal stays False) so the
         # next reset re-anchors on the same level instead of forcing a full
@@ -1001,7 +1472,31 @@ class JumpKingEnv:
         if not settled and not terminated:
             terminated = True
 
+        # WEDGE guard: grounded, settled, and yet completely immobile. Distinct
+        # from the trap above -- move_available() is True here, the king simply
+        # cannot be moved by any action from where he is.
+        if self.stuck_limit > 0 and not terminated:
+            here = (level, round(float(self.king.rect_x), 1),
+                    round(float(self.king.rect_y), 1))
+            if here == self._stuck_at:
+                self._stuck_n += 1
+                if self._stuck_n >= self.stuck_limit:
+                    terminated = True
+                    # Charge it like a fall. A zero-cost terminal is worse than
+                    # useless here: wedging would DOMINATE falling, and a policy
+                    # with no prior learns to wedge on purpose -- measured, the
+                    # from-scratch arm sat at exactly 0.00 return forever.
+                    # (fail_penalty, when set, already prices every failure the
+                    # same, so this would double-charge.)
+                    if self.fail_penalty <= 0.0:
+                        reward -= self.level_penalty
+            else:
+                self._stuck_at, self._stuck_n = here, 0
+
         truncated = self._steps >= self.max_steps
+
+        if (terminated or truncated) and not reached_goal:
+            reward -= self.fail_penalty
 
         if terminated or truncated:
             # success = reached the GOAL, not merely 'episode ended'. A fall

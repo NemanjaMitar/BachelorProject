@@ -10,12 +10,12 @@ coarse grid, and merges the results into the next level's start-state file
 (list-of-dicts format, score 0.0 = hardest curriculum stage, unlocked last).
 
 Usage (after level 6 is trained):
-    python Handoff.py --level 6 --checkpoint checkpoints/L6/ppo_XXXX.pt --start-states starts_L6.json
-    -> merges arrival states into starts_L7.json
+    python Handoff.py --level 6 --checkpoint checkpoints/L6/ppo_XXXX.pt --start-states starts/starts_L6.json
+    -> merges arrival states into starts/starts_L7.json
 
     --episodes 50        more episodes = better coverage of arrival spots
     --greedy             argmax policy instead of sampling (fewer, canonical spots)
-    --out FILE           merge somewhere else than starts_L<N+1>.json
+    --out FILE           merge somewhere else than starts/starts_L<N+1>.json
 """
 
 import os
@@ -68,13 +68,13 @@ def main():
                     help="the SOLVED level whose model does the delivering")
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--start-states", required=True,
-                    help="that level's own start pool (starts_L<N>.json)")
+                    help="that level's own start pool (starts/starts_L<N>.json)")
     ap.add_argument("--episodes", type=int, default=50)
     ap.add_argument("--max-steps", type=int, default=80)
     ap.add_argument("--greedy", action="store_true",
                     help="argmax policy (default: sample like training)")
     ap.add_argument("--out", default=None,
-                    help="pool file to merge into (default starts_L<N+1>.json)")
+                    help="pool file to merge into (default starts/starts_L<N+1>.json)")
     ap.add_argument("--fine-walk-frames", type=int, default=0,
                     help="pass the same value the model was TRAINED with")
     ap.add_argument("--extra-charges", type=str, default="",
@@ -84,13 +84,13 @@ def main():
                     help="comma list of wait actions the model was trained "
                          "with (wind levels)")
     ap.add_argument("--wind-jump", type=str, default="",
-                    help="comma buckets for wind-jump combos (match training)")
+                    help="comma buckets for wind-jump actions (match training)")
     ap.add_argument("--wind-obs", action="store_true",
                     help="the model was trained with wind observation")
     args = ap.parse_args()
 
     goal = args.level + 1
-    out = args.out or f"starts_L{goal}.json"
+    out = args.out or f"starts/starts_L{goal}.json"
     device = get_device()
 
     extra = tuple(int(c) for c in args.extra_charges.split(",")) if args.extra_charges else ()
@@ -112,8 +112,11 @@ def main():
             f"--extra-charges to training.")
     # Actions are appended, never reordered, so a smaller model's indices
     # stay valid in a bigger env.
+    cfg = ckpt.get("action_cfg", {})
     net = ActorCritic(env.obs_dim, n_act,
-                      grid_shape=env.grid_shape, n_scalars=env.n_scalars).to(device)
+                      grid_shape=env.grid_shape, n_scalars=env.n_scalars,
+                      extra_conv=bool(cfg.get("extra_conv", False)),
+                      scalar_embed=int(cfg.get("scalar_embed", 0))).to(device)
     net.load_state_dict(ckpt["model"])
     net.eval()
     print(f"loaded {args.checkpoint} | level {args.level} -> {goal} | "
@@ -154,8 +157,14 @@ def main():
         per_state[key0] = (s_ok + (1 if ok else 0), s_n + 1)
         if ok:
             succ += 1
+            # Bank the arrival MOMENTUM too, not just the position: on ice a
+            # grounded king keeps sliding, so a pool state without velocity
+            # trains the next level on a state the relay never actually hands
+            # it. JK_Env.reset() replays vx/vy when they are present.
+            avx, avy = env.velocity()
             st = {"level": int(info["level"]),
-                  "x": int(info["x"]), "y": int(info["y"])}
+                  "x": int(info["x"]), "y": int(info["y"]),
+                  "vx": round(avx, 5), "vy": round(avy, 5)}
             # sanity: never bank an off-screen/seam-glitch position
             if 0 <= st["x"] <= 460 and 0 <= st["y"] <= 340:
                 arrivals.append(st)

@@ -1,0 +1,59 @@
+{
+ "format": "jumpking-world",
+ "version": 1,
+ "name": "tower",
+ "levels": [
+  {
+   "wind": false,
+   "platforms": [
+    {
+     "x": 0,
+     "y": 344,
+     "w": 480,
+     "h": 16,
+     "type": "land"
+    },
+    {
+     "x": 270,
+     "y": 264,
+     "w": 170,
+     "h": 14,
+     "type": "land"
+    },
+    {
+     "x": 60,
+     "y": 184,
+     "w": 170,
+     "h": 14,
+     "type": "ice"
+    },
+    {
+     "x": 300,
+     "y": 104,
+     "w": 180,
+     "h": 14,
+     "type": "land"
+    }
+   ]
+  },
+  {
+   "wind": false,
+   "platforms": [
+    {
+     "x": 0,
+     "y": 336,
+     "w": 290,
+     "h": 24,
+     "type": "land"
+    },
+    {
+     "x": 330,
+     "y": 250,
+     "w": 150,
+     "h": 14,
+     "type": "ice"
+    }
+   ]
+  }
+ ]
+}

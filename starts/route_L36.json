@@ -1,0 +1,54 @@
+{
+ "level": 36,
+ "goal_level": 37,
+ "note": "verified 5-action route; x windows are measured basins +-2px",
+ "route": [
+  [
+   "jump",
+   "left",
+   28
+  ],
+  [
+   "jump",
+   "up",
+   8
+  ],
+  [
+   "jump",
+   "left",
+   32
+  ],
+  [
+   "jump",
+   "up",
+   4
+  ],
+  [
+   "jump",
+   "right",
+   32
+  ]
+ ],
+ "waypoints": [
+  [
+   240,
+   297,
+   314
+  ],
+  [
+   240,
+   277,
+   296
+  ],
+  [
+   80,
+   244,
+   283
+  ],
+  [
+   80,
+   242,
+   291
+  ]
+ ]
+}

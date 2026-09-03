@@ -7,3 +7,7 @@ torch~=2.12
 cloudpickle==3.1.2
 # pygame 2.6.1 still imports pkg_resources; newer setuptools removed it
 setuptools<81
+# charts (ChartLogs.py, tools/thesis/*) and the notebook figures
+matplotlib>=3.8
+# optional -- only needed to run JumpKing_PPO_walkthrough.ipynb:
+#   pip install jupyter

@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 """Sample a broad distribution of valid grounded states across a level, so PPO
-(warm-started from the combo policy) learns to reach the exit from ANYWHERE on
+(warm-started from a demonstration) learns to reach the exit from ANYWHERE on
 the level -- funnelling any state back onto the known-good path.
 
 Teleport() drops the King from each grid point and settles him; we keep the
 spots where he comes to rest ON this level (didn't fall through). Scored by
 altitude for the reverse curriculum (near-exit = easy = high score), so training
 starts near the top and works outward. Optionally merges the on-path demo states
-(starts_LN_demo.json) so the proven route is always represented.
+(starts/starts_LN_demo.json) so the proven route is always represented.
 
     python SampleStates.py --level 30 --merge-demo
 """
@@ -30,7 +30,7 @@ def main():
     ap.add_argument("--windy", action="store_true",
                     help="build with wind_obs/wind_jump (for windy levels)")
     ap.add_argument("--merge-demo", action="store_true",
-                    help="also include starts_L<level>_demo.json (the route)")
+                    help="also include starts/starts_L<level>_demo.json (the route)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
     extra = tuple(int(c) for c in args.extra_charges.split(",")) if args.extra_charges else ()
@@ -69,7 +69,7 @@ def main():
               for (sx, sy) in spots]
 
     if args.merge_demo:
-        dpath = f"starts_L{args.level}_demo.json"
+        dpath = f"starts/starts_L{args.level}_demo.json"
         if os.path.exists(dpath):
             demo = json.load(open(dpath))
             # boost the proven route slightly so it's always well-represented
@@ -77,7 +77,7 @@ def main():
                 d["score"] = min(1.0, d.get("score", 0.5) + 0.05)
             states = demo + states
 
-    out = args.out or f"starts_L{args.level}_broad.json"
+    out = args.out or f"starts/starts_L{args.level}_broad.json"
     json.dump(states, open(out, "w"), indent=2)
     print(f"L{args.level}: sampled {len(spots)} valid grounded states "
           f"(y {ymin}..{ymax})"

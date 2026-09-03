@@ -4,10 +4,10 @@ primitive actions), and does it generalize beyond the exact demo states?
 
 Plays the policy greedily, one primitive action per grounded decision, from a
 band of start x's around the entry (and, for windy levels, several wind phases).
-Reports completion rate. Use it on the BC warm-start (baseline) and again after
+Reports completion rate. Use it on the warm-started net (baseline) and again after
 PPO fine-tune to see whether PPO added real robustness.
 
-    python GenTest.py --checkpoint checkpoints/L32/ppo_ppobc.pt --level 32 \
+    python GenTest.py --checkpoint checkpoints/L32_king/best_rung0.pt --level 32 \
         --goal-level 33 --x 56 --y 320
 """
 import os, argparse
@@ -27,7 +27,7 @@ def main():
     ap.add_argument("--y", type=int, default=None)
     ap.add_argument("--states", type=str, default=None,
                     help="robustness score: fraction of the states in this JSON "
-                         "(e.g. starts_LN_broad.json) the policy completes")
+                         "(e.g. starts/starts_LN_broad.json) the policy completes")
     ap.add_argument("--band", type=int, default=6, help="+/- x jitter to test")
     ap.add_argument("--step", type=int, default=2)
     ap.add_argument("--trials", type=int, default=4, help="wind phases per x")
@@ -40,14 +40,16 @@ def main():
     tbl = build_action_table(fine_walk_frames=cfg.get("fine_walk_frames", 3),
                              extra_charges=tuple(cfg.get("extra_charges", ())),
                              wait_frames=tuple(cfg.get("wait_frames", ())),
-                             wind_jump=tuple(cfg.get("wind_jump", ())))
+                             wind_jump=tuple(cfg.get("wind_jump", ())),
+                             settle_action=bool(cfg.get("settle_action", False)))
     n = ck["model"]["policy_head.weight"].shape[0]
-    nsc = 6 if cfg.get("wind_obs") else 4
+    nsc = 4 + (2 if cfg.get("wind_obs") else 0) + (2 if cfg.get("vel_obs") else 0)
     env = JumpKingEnv(max_steps=300, goal_level=args.goal_level,
                       fine_walk_frames=cfg.get("fine_walk_frames", 3),
                       extra_charges=tuple(cfg.get("extra_charges", ())),
                       wind_jump=tuple(cfg.get("wind_jump", ())) or (0, 4),
-                      wind_obs=bool(cfg.get("wind_obs")))
+                      wind_obs=bool(cfg.get("wind_obs")),
+                      vel_obs=bool(cfg.get("vel_obs")))
     env.actions = tbl; env.num_actions = len(tbl)
     net = ActorCritic(env.obs_dim, n, grid_shape=env.grid_shape, n_scalars=nsc).to(device)
     net.load_state_dict(ck["model"]); net.eval()

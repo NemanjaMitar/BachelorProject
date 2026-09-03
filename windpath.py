@@ -4,8 +4,7 @@
 wind_jump actions are atomic (wait-for-bucket-then-jump) so their landing from a
 settled spot is deterministic -> a BFS over them is a reliable route finder on
 windy levels (unlike a raw-action search, which the stochastic gust breaks).
-Prints the shortest action sequence that reaches goal_level, ready to paste into
-a BC patch.
+Prints the shortest action sequence that reaches goal_level.
 
     python windpath.py --level 26 --x 184 --y 281 --goal-level 27
 """

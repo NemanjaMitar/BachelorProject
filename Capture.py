@@ -18,7 +18,7 @@ Fly mode (no need to actually beat the game):
 Capture hotkeys:
     P                 record the king's CURRENT grounded position as a checkpoint
                       (exit fly mode and land on a platform first)
-    S                 save all recorded checkpoints to start_states.json
+    S                 save all recorded checkpoints to starts/start_states.json
     BACKSPACE         delete the last recorded checkpoint
     ESC / close       save and quit
 
@@ -41,7 +41,7 @@ import pygame
 import JK_Env
 _real_get_pressed = pygame.key.get_pressed
 
-OUT = "start_states.json"
+OUT = "starts/start_states.json"
 SCALE = 2
 FLY_SPEED = 10        # px per frame in fly mode
 FLY_SPEED_FAST = 25   # with LSHIFT held

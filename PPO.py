@@ -35,26 +35,59 @@ class ActorCritic(nn.Module):
         We unpack, run a small conv stack over the grid, and concat the scalars
         before the dense trunk. Packing keeps the env/buffer/vec-env pipeline
         identical to the scalar agent -- only this class knows about the grid.
+
+    Two optional knobs, both OFF by default so every existing checkpoint builds
+    the identical module and loads unchanged:
+      * extra_conv    -- one more stride-2 conv, shrinking the flattened grid
+                         feature (45x60 grid: 32*6*8=1536 -> 32*3*4=384).
+      * scalar_embed  -- project the scalars through a small MLP before the
+                         concat instead of appending them raw.
+    They exist for the same reason: with a raw concat the scalars are a handful
+    of numbers against a 1536-wide grid feature, so the king's velocity -- the
+    ONLY thing that distinguishes two icy states at the same position -- has
+    almost no share of the trunk's input. Together they take that share from
+    ~0.4% to ~14%.
     """
-    def __init__(self, obs_dim, num_actions, hidden=128, grid_shape=None, n_scalars=0):
+    def __init__(self, obs_dim, num_actions, hidden=128, grid_shape=None, n_scalars=0,
+                 extra_conv=False, scalar_embed=0, explore_eps=0.0):
         super().__init__()
+        # Floor on every action's probability, mixed into the policy ITSELF so
+        # sampling and evaluation use the same distribution and PPO stays
+        # on-policy. The entropy coefficient only controls AVERAGE entropy: a
+        # policy can sit at entropy 0.8 overall and still be at p=1.00 on the
+        # one state that matters, which is exactly what stalled L36 rung 5 --
+        # 3 of 38 actions there hand off to a win and the policy sampled none
+        # of them. argmax is unchanged, so greedy evaluation and the ladder
+        # gate are unaffected.
+        self.explore_eps = float(explore_eps)
         self.grid_shape = grid_shape
         self.n_scalars = int(n_scalars)
+        self.extra_conv = bool(extra_conv)
+        self.scalar_embed = int(scalar_embed or 0)
         if grid_shape is not None:
             C, H, W = grid_shape
             self.grid_flat = C * H * W
-            self.conv = nn.Sequential(
-                nn.Conv2d(C, 16, 3, stride=2, padding=1), nn.ReLU(),
-                nn.Conv2d(16, 32, 3, stride=2, padding=1), nn.ReLU(),
-                nn.Conv2d(32, 32, 3, stride=2, padding=1), nn.ReLU(),
-                nn.Flatten(),
-            )
+            layers = [nn.Conv2d(C, 16, 3, stride=2, padding=1), nn.ReLU(),
+                      nn.Conv2d(16, 32, 3, stride=2, padding=1), nn.ReLU(),
+                      nn.Conv2d(32, 32, 3, stride=2, padding=1), nn.ReLU()]
+            if self.extra_conv:
+                layers += [nn.Conv2d(32, 32, 3, stride=2, padding=1), nn.ReLU()]
+            layers.append(nn.Flatten())
+            self.conv = nn.Sequential(*layers)
             with torch.no_grad():
                 conv_out = self.conv(torch.zeros(1, C, H, W)).shape[1]
-            trunk_in = conv_out + self.n_scalars
+            if self.scalar_embed and self.n_scalars:
+                self.scalar_mlp = nn.Sequential(
+                    nn.Linear(self.n_scalars, self.scalar_embed), nn.Tanh())
+                scal_out = self.scalar_embed
+            else:
+                self.scalar_mlp = None
+                scal_out = self.n_scalars
+            trunk_in = conv_out + scal_out
         else:
             self.grid_flat = 0
             self.conv = None
+            self.scalar_mlp = None
             trunk_in = obs_dim
         self.trunk = nn.Sequential(
             nn.Linear(trunk_in, hidden), nn.Tanh(),
@@ -79,6 +112,8 @@ class ActorCritic(nn.Module):
         C, H, W = self.grid_shape
         grid = x[:, :self.grid_flat].reshape(-1, C, H, W)
         scal = x[:, self.grid_flat:]
+        if self.scalar_mlp is not None:
+            scal = self.scalar_mlp(scal)
         h = self.conv(grid)
         return self.trunk(torch.cat([h, scal], dim=1))
 
@@ -86,17 +121,24 @@ class ActorCritic(nn.Module):
         h = self._features(x)
         return self.policy_head(h), self.value_head(h).squeeze(-1)
 
+    def _dist(self, logits):
+        if self.explore_eps <= 0.0:
+            return Categorical(logits=logits)
+        p = torch.softmax(logits, dim=-1)
+        n = logits.shape[-1]
+        return Categorical(probs=(1.0 - self.explore_eps) * p + self.explore_eps / n)
+
     @torch.no_grad()
     def act(self, obs):
         """obs: (N, obs_dim) tensor -> action, logprob, value (all (N,))."""
         logits, value = self.forward(obs)
-        dist = Categorical(logits=logits)
+        dist = self._dist(logits)
         action = dist.sample()
         return action, dist.log_prob(action), value
 
     def evaluate(self, obs, actions):
         logits, value = self.forward(obs)
-        dist = Categorical(logits=logits)
+        dist = self._dist(logits)
         return dist.log_prob(actions), dist.entropy(), value
 
 
@@ -163,16 +205,34 @@ class PPO:
                  clip=0.2, epochs=4, minibatches=4,
                  vf_coef=0.5, ent_coef=0.01, max_grad_norm=0.5,
                  clip_value=True, hidden=128,
-                 grid_shape=None, n_scalars=0):
+                 grid_shape=None, n_scalars=0,
+                 extra_conv=False, scalar_embed=0, explore_eps=0.0,
+                 grad_split=False):
         self.device = device or get_device()
         self.net = ActorCritic(obs_dim, num_actions, hidden,
-                               grid_shape=grid_shape, n_scalars=n_scalars).to(self.device)
+                               grid_shape=grid_shape, n_scalars=n_scalars,
+                               extra_conv=extra_conv,
+                               scalar_embed=scalar_embed,
+                               explore_eps=explore_eps).to(self.device)
         self.opt = torch.optim.Adam(self.net.parameters(), lr=lr)
 
         self.gamma, self.lam, self.clip = gamma, lam, clip
         self.epochs, self.minibatches = epochs, minibatches
         self.vf_coef, self.ent_coef = vf_coef, ent_coef
         self.max_grad_norm, self.clip_value = max_grad_norm, clip_value
+        # CLIP THE POLICY AND VALUE GRADIENTS SEPARATELY. The trunk is shared,
+        # so one global clip_grad_norm_ splits the budget in proportion to the
+        # two losses -- and the value loss is a SQUARED return. Measured on the
+        # stuck L37 rung 5 (returns spread -51..+48, value loss 485):
+        #   ||grad policy_loss||  =   0.55
+        #   ||grad 0.5*value_loss|| = 443.6
+        # so the global clip to 0.5 scaled everything by 0.0011 and the policy
+        # moved at ~1/800 of its nominal learning rate -- exactly the frozen
+        # approx_kl ~ 5e-4 and the entropy pinned near log(38) seen for hundreds
+        # of updates. Clipping the two contributions to max_grad_norm each and
+        # summing bounds them equally, so the reward scale can no longer decide
+        # how fast the policy learns.
+        self.grad_split = bool(grad_split)
 
     def update(self, buf: RolloutBuffer, last_value):
         adv, returns = buf.compute_gae(last_value, self.gamma, self.lam)
@@ -225,10 +285,28 @@ class PPO:
                 entropy_loss = entropy.mean()
                 loss = policy_loss + self.vf_coef * v_loss - self.ent_coef * entropy_loss
 
-                self.opt.zero_grad()
-                loss.backward()
-                nn.utils.clip_grad_norm_(self.net.parameters(), self.max_grad_norm)
-                self.opt.step()
+                if self.grad_split:
+                    self.opt.zero_grad()
+                    (policy_loss - self.ent_coef * entropy_loss).backward(
+                        retain_graph=True)
+                    nn.utils.clip_grad_norm_(self.net.parameters(),
+                                             self.max_grad_norm)
+                    pol_grad = [None if p.grad is None else p.grad.detach().clone()
+                                for p in self.net.parameters()]
+                    self.opt.zero_grad()
+                    (self.vf_coef * v_loss).backward()
+                    nn.utils.clip_grad_norm_(self.net.parameters(),
+                                             self.max_grad_norm)
+                    for p, g in zip(self.net.parameters(), pol_grad):
+                        if g is None:
+                            continue
+                        p.grad = g if p.grad is None else p.grad + g
+                    self.opt.step()
+                else:
+                    self.opt.zero_grad()
+                    loss.backward()
+                    nn.utils.clip_grad_norm_(self.net.parameters(), self.max_grad_norm)
+                    self.opt.step()
 
                 with torch.no_grad():
                     approx_kl = (b_logp[mb] - new_logp).mean().item()

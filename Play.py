@@ -40,7 +40,8 @@ import numpy as np
 import torch
 import pygame
 
-from JK_Env import JumpKingEnv, build_action_table
+from JK_Env import JumpKingEnv, build_action_table, obs_selector
+from Occupancy import SUPPORTED_CHANNELS
 from PPO import ActorCritic, get_device
 
 
@@ -117,35 +118,48 @@ class ModelBank:
             wcombo = tuple(tuple(tuple(s) for s in r)
                            for r in cfg.get("wind_combo", ()))
             wind = bool(cfg.get("wind_obs", False))
+            vel = bool(cfg.get("vel_obs", False))
+            chans = cfg.get("grid_channels")      # None = the legacy triple
+            xconv = bool(cfg.get("extra_conv", False))
+            sembed = int(cfg.get("scalar_embed", 0))
+            settle = bool(cfg.get("settle_action", False))
         elif n_act in KNOWN_ACTION_CFGS:
             fine, extra = KNOWN_ACTION_CFGS[n_act]
             wait, wjump, approach, wcombo, wind = (), (), (), (), False
+            vel, chans = False, None
+            xconv, sembed = False, 0
+            settle = False
         else:
             raise SystemExit(
                 f"{path}: {n_act} actions and no stored action_cfg -- cannot "
                 f"reconstruct its action table.")
         table = build_action_table(fine_walk_frames=fine, extra_charges=extra,
                                    wait_frames=wait, wind_jump=wjump,
-                                   approach_jump=approach, wind_combo=wcombo)
+                                   approach_jump=approach, wind_combo=wcombo,
+                                   settle_action=settle)
         if len(table) != n_act:
             raise SystemExit(
                 f"{path}: action_cfg gives {len(table)} actions but the "
                 f"policy head has {n_act} -- checkpoint metadata is corrupt.")
-        # The model sees the FIRST obs_dim entries of the env's observation:
-        # scalars are appended after the grid, and the wind pair goes last,
-        # so a 4-scalar model's slice of a 6-scalar obs is exactly what it
-        # was trained on.
-        n_scal = 6 if wind else 4
-        obs_dim = self.env._grid_flat + n_scal
-        net = ActorCritic(obs_dim, n_act,
-                          grid_shape=self.env.grid_shape,
-                          n_scalars=n_scal).to(self.device)
+        # One selector per model narrows the env's SUPERSET observation to the
+        # grid channels and scalar columns this checkpoint was trained on. The
+        # old code took the first obs_dim entries instead, which is only correct
+        # when a model's scalars are a PREFIX of the env's -- true for wind
+        # models, false for velocity models (their vx,vy sit after the wind
+        # pair), so ice checkpoints could not be played at all.
+        sel = obs_selector(self.env, chans, wind, vel, os.path.basename(path),
+                           cfg.get("vel_encoding", "xy") if cfg else "xy")
+        net = ActorCritic(sel.obs_dim, n_act,
+                          grid_shape=sel.grid_shape,
+                          n_scalars=sel.n_scalars,
+                          extra_conv=xconv, scalar_embed=sembed).to(self.device)
         net.load_state_dict(ckpt["model"])
         net.eval()
         print(f"loaded {path} (trained to step {ckpt.get('step', '?')}, "
               f"{n_act} actions, extras={extra or 'none'}"
-              f"{', wind-aware' if wind else ''})")
-        return net, table, obs_dim
+              f"{', wind-aware' if wind else ''}"
+              f"{', velocity-aware' if vel else ''})")
+        return net, table, sel
 
     def for_level(self, lvl):
         if lvl in self._cache:
@@ -162,6 +176,9 @@ class ModelBank:
                           f"(action/obs mismatch?) -- {e}")
         self._cache[lvl] = net
         return net
+
+
+OVERLAY = {"Land": (108, 122, 96), "Ice": (128, 196, 232), "Snow": (226, 232, 240)}
 
 
 def main():
@@ -186,6 +203,9 @@ def main():
                         "that exact spot, e.g. a captured start state)")
     p.add_argument("--x", type=int, default=None)
     p.add_argument("--y", type=int, default=None)
+    p.add_argument("--world", type=str, default=None,
+                   help="watch a model play a custom world built with "
+                        "LevelEditor.py (levels/<name>.json)")
     p.add_argument("--start-states", type=str, default=None,
                    help="start each episode from a random state in this pool "
                         "(same file training used), instead of the bottom")
@@ -214,14 +234,19 @@ def main():
     print(f"env action set: fine_walk_frames={fine} extra_charges={extra}")
 
     device = get_device()
-    # wind_obs=True: the env ALWAYS produces the full 6-scalar observation;
-    # each model slices off what it was trained on (see ModelBank.load).
+    # The env ALWAYS produces the SUPERSET observation (wind AND velocity
+    # scalars); each model selects what it was trained on (see ModelBank.load),
+    # which is what lets plain, windy and icy models share one relay.
     env = JumpKingEnv(max_steps=args.max_steps, goal_level=args.goal_level,
                       start_states=args.start_states,
                       fine_walk_frames=fine,
                       extra_charges=extra,
                       wind_jump=(0, 4),
-                      wind_obs=True)
+                      wind_obs=True, vel_obs=True, vel_encoding="both",
+                      grid_channels=SUPPORTED_CHANNELS)
+    if args.world:
+        import CustomWorld
+        CustomWorld.apply_world(env, CustomWorld.load_world(args.world))
 
     bank = ModelBank(env, device, args.model_dir)
     fallback = bank.load(args.checkpoint) if args.checkpoint else None
@@ -238,6 +263,20 @@ def main():
     pygame.display.set_caption("Jump King — trained PPO agent")
     clock = pygame.time.Clock()
     hud_font = pygame.font.Font(None, 22)
+
+    # Custom / generated screens carry no art -- the engine still paints the
+    # ORIGINAL level's background behind them, so without this overlay the real
+    # collision geometry is invisible and the painted ledges you can see are not
+    # solid. PlayWorld.py does the same thing for human play; H toggles it.
+    show_overlay = [args.world is not None]
+
+    def handle_events():
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                env.close()
+                sys.exit()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_h:
+                show_overlay[0] = not show_overlay[0]
 
     def draw():
         # The env renders the world onto env.game_screen if we ask the level to.
@@ -257,6 +296,11 @@ def main():
         except Exception as e:
             # Cosmetic blit failures shouldn't crash the viewer.
             print("draw warning:", e)
+        if show_overlay[0]:
+            for p in (env.levels.levels[env.levels.current_level].platforms or []):
+                col = OVERLAY.get(getattr(p, "type", "Land"), OVERLAY["Land"])
+                pygame.draw.rect(env.game_screen, col,
+                                 pygame.Rect(p.x, p.y, p.width, p.height))
         scaled = pygame.transform.scale(env.game_screen, (w, h))
         window.blit(scaled, (0, 0))
         try:
@@ -279,14 +323,11 @@ def main():
         steps = 0
         net = None
         net_table = None
-        net_obs_dim = None
+        net_select = None
         net_lvl = None
 
         while not done:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    env.close()
-                    sys.exit()
+            handle_events()
 
             # ---- pick the policy for the level the king stands on ----------
             lvl = env.levels.current_level
@@ -295,12 +336,12 @@ def main():
                 if cand is not None:
                     if net is not None and cand[0] is not net:
                         print(f"\n>>> level {lvl}: switching to model L{lvl}")
-                    net, net_table, net_obs_dim = cand
+                    net, net_table, net_select = cand
                 elif fallback is not None:
                     if net is not None and net is not fallback[0]:
                         print(f"\n>>> level {lvl}: no L{lvl} model, using the "
                               f"--checkpoint fallback")
-                    net, net_table, net_obs_dim = fallback
+                    net, net_table, net_select = fallback
                 elif net is not None:
                     if lvl not in warned_levels:
                         print(f"\n>>> level {lvl}: no model found, keeping the "
@@ -319,7 +360,7 @@ def main():
                 env.num_actions = len(net_table)
                 net_lvl = lvl
 
-            ob = torch.as_tensor(obs[:net_obs_dim],
+            ob = torch.as_tensor(net_select(obs),
                                  device=device).float().unsqueeze(0)
             with torch.no_grad():
                 logits, _ = net(ob)
@@ -333,10 +374,7 @@ def main():
             # settled landing frame. The env calls render_cb() after each
             # physics frame; we redraw and pace it there.
             def render_cb():
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        env.close()
-                        sys.exit()
+                handle_events()
                 draw()
                 clock.tick(args.fps)
             obs, r, term, trunc, info = env.step(a, render_cb=render_cb)

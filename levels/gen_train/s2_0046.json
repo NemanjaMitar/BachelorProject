@@ -1,0 +1,119 @@
+{
+ "format": "jumpking-world",
+ "version": 1,
+ "name": "s2_0046",
+ "levels": [
+  {
+   "wind": false,
+   "platforms": [
+    {
+     "x": 0,
+     "y": 344,
+     "w": 480,
+     "h": 16,
+     "type": "land"
+    },
+    {
+     "x": 0,
+     "y": 0,
+     "w": 8,
+     "h": 360,
+     "type": "land"
+    },
+    {
+     "x": 472,
+     "y": 0,
+     "w": 8,
+     "h": 360,
+     "type": "land"
+    },
+    {
+     "x": 10,
+     "y": 261,
+     "w": 76,
+     "h": 14,
+     "type": "land"
+    },
+    {
+     "x": 87,
+     "y": 188,
+     "w": 100,
+     "h": 14,
+     "type": "land"
+    },
+    {
+     "x": 10,
+     "y": 123,
+     "w": 75,
+     "h": 14,
+     "type": "land"
+    },
+    {
+     "x": 86,
+     "y": 54,
+     "w": 61,
+     "h": 14,
+     "type": "land"
+    }
+   ]
+  },
+  {
+   "wind": false,
+   "platforms": [
+    {
+     "x": 0,
+     "y": 376,
+     "w": 480,
+     "h": 40,
+     "type": "land"
+    },
+    {
+     "x": 0,
+     "y": 0,
+     "w": 8,
+     "h": 360,
+     "type": "land"
+    },
+    {
+     "x": 472,
+     "y": 0,
+     "w": 8,
+     "h": 360,
+     "type": "land"
+    }
+   ]
+  }
+ ],
+ "gen": {
+  "seed": 2,
+  "index": 63,
+  "verified": true,
+  "cfg": {
+   "n_ledges": [
+    3,
+    5
+   ],
+   "ledge_w": [
+    60,
+    140
+   ],
+   "ledge_h": 14,
+   "dy": [
+    56,
+    92
+   ],
+   "stagger": [
+    -40,
+    110
+   ],
+   "min_exposed": 34,
+   "top_y": [
+    48,
+    88
+   ],
+   "ice_p": 0.0,
+   "snow_p": 0.0,
+   "wind": false
+  }
+ }
+}

@@ -11,11 +11,56 @@ __pycache__/
 Thumbs.db
 .DS_Store
 
+# Notebooks
+.ipynb_checkpoints/
+
 # Scratch / logs
 logs/
 *.tmp
+_trash/
 run_backup_0-42.zip
-checkpoints/*_ppo/
-checkpoints/*_broad/
-checkpoints/*_fix*/
-checkpoints/*_veltest/
+
+# Bulky side-experiment checkpoints (the 0->42 run in checkpoints/L*/ is tracked)
+checkpoints/experiments/*_ppo/
+checkpoints/experiments/*_broad/
+checkpoints/experiments/*_fix*/
+checkpoints/experiments/*_veltest/
+
+# Staging tree built by tools/relay_real.py --play (regenerable)
+checkpoints_real/
+
+# Step-0 macro nets: a hand-searched route, not a trained policy. The screen's
+# real model lives in checkpoints/L<N>_real*/_king*/_ice*/_swap/ and in
+# checkpoints/relay_bundle.pt. (L12/ppo_9999999.pt IS trained -- not listed.)
+checkpoints/L23/ppo_9999999.pt
+checkpoints/L26/ppo_9999999.pt
+checkpoints/L28/ppo_9999999.pt
+checkpoints/L29/ppo_9999999.pt
+checkpoints/L30/ppo_9999999.pt
+checkpoints/L31/ppo_9999999.pt
+checkpoints/L32/ppo_9999999.pt
+checkpoints/L33/ppo_9999999.pt
+checkpoints/L34/ppo_9999999.pt
+checkpoints/L35/ppo_9999999.pt
+checkpoints/L36/ppo_9999999.pt
+checkpoints/L37/ppo_9999999.pt
+checkpoints/L38/ppo_9999999.pt
+checkpoints/L39/ppo_9999999.pt
+checkpoints/L40/ppo_9999999.pt
+checkpoints/L42/ppo_9999999.pt
+
+# Warm-start-only nets and their pre-training dirs (superseded by the trained
+# models in checkpoints/L<N>_*/)
+checkpoints/**/ppo_ppobc*.pt
+checkpoints/**/pre/
+checkpoints/L*/dsad/
+checkpoints/**/L24 temp/
+checkpoints/**/L30 backup/
+checkpoints/**/god bless/
+
+# Staging trees written by tools/relay_bundle.py (regenerable)
+checkpoints_bundle/
+
+# Demonstrations replayed from an older route; the deployed models were trained
+# from routes searched with tools/route_from_entry.py (starts/demo_L<N>_swap.json)
+starts/demo_L*_combo.json

@@ -13,7 +13,7 @@ The result merges into the level's pool file. Combine with:
   * LevelGraph.py --emit-starts -- adds proven route states with graded scores
 
 Usage:
-    python AutoSeed.py --level 12                      # -> starts_L12.json
+    python AutoSeed.py --level 12                      # -> starts/starts_L12.json
     python AutoSeed.py --level 12 --n 8 --out my.json
 """
 
@@ -108,10 +108,10 @@ def main():
     ap.add_argument("--n", type=int, default=8,
                     help="number of spread spots to keep")
     ap.add_argument("--out", default=None,
-                    help="pool file to merge into (default starts_L<n>.json)")
+                    help="pool file to merge into (default starts/starts_L<n>.json)")
     args = ap.parse_args()
 
-    out = args.out or f"starts_L{args.level}.json"
+    out = args.out or f"starts/starts_L{args.level}.json"
     env = JumpKingEnv(max_steps=100)
 
     cands = candidate_spots(env, args.level)

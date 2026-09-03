@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Validate start_states.json by EXHAUSTIVE short-horizon reachability.
+Validate starts/start_states.json by EXHAUSTIVE short-horizon reachability.
 
 For every captured checkpoint this teleports the King there (through the
 canonical JK_Env.teleport, so grounding is identical to training), then does a
@@ -11,13 +11,13 @@ how few actions it needs to clear its level:
     score = (depth - d + 1) / depth      d = actions needed, 0 => dead end
 
 Usage:
-    python Validate_Start_States.py start_states.json --depth 2
-    python Validate_Start_States.py start_states.json --level 5      # one level only
-    python Validate_Start_States.py start_states.json --depth 3 --min-score 0.0
+    python Validate_Start_States.py starts/start_states.json --depth 2
+    python Validate_Start_States.py starts/start_states.json --level 5      # one level only
+    python Validate_Start_States.py starts/start_states.json --depth 3 --min-score 0.0
 
 Writes a list of {level,x,y,score} dicts (the format JK_Env._load_start_states
 already understands) keeping states with score > --min-score. Output file:
-<path>_scored.json, or starts_L<n>.json when --level is given -- ready to pass
+<path>_scored.json, or starts/starts_L<n>.json when --level is given -- ready to pass
 straight to Train.py --start-states.
 """
 
@@ -96,7 +96,7 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--level", type=int, default=None,
                     help="only validate states captured on this level and write "
-                         "them to starts_L<n>.json (per-level training pool)")
+                         "them to starts/starts_L<n>.json (per-level training pool)")
     ap.add_argument("--depth", type=int, default=2)
     ap.add_argument("--fine-walk-frames", type=int, default=0,
                     help="include the micro-walk action pair in the BFS "
@@ -148,7 +148,7 @@ def main():
     if args.out:
         out = args.out
     elif args.level is not None:
-        out = f"starts_L{args.level}.json"
+        out = f"starts/starts_L{args.level}.json"
     else:
         out = os.path.splitext(args.path)[0] + "_scored.json"
     with open(out, "w") as f:
